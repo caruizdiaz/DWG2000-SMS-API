@@ -186,9 +186,7 @@ int main(int argc, char** argv)
 
 	pthread_mutex_init(&_sms_queue.lock, NULL);
 
-	str_t m	= { "hola", 4 };
-	str_t nbr = { "0981146623", 10 };
-	sms_t sms = { { "0981146623", 10 }, { "hola", 4 } };
+	sms_t sms = { { "0981112233", 10 }, { "hola", 4 } };
 
 	_sms_queue.sms	= NULL;
 	for(;;)
