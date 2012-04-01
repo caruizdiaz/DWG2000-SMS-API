@@ -2,7 +2,7 @@
  * global.h
  *
  *  Created on: Oct 20, 2011
- *      Author: carlos
+ *      Author: caruizdiaz
  */
 
 #ifndef UTIL_H_

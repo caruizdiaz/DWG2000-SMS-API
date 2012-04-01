@@ -2,7 +2,7 @@
  * ip_socket.c
  *
  *  Created on: Nov 22, 2011
- *      Author: carlos
+ *      Author: caruizdiaz
  */
 
 #include "ip_socket.h"

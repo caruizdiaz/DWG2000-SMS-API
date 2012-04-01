@@ -2,7 +2,8 @@
  * dwg.c
  *
  *  Created on: Mar 28, 2012
- *      Author: carlos
+ *      Author: caruizdiaz
+ *
  */
 
 #include "dwg.h"

@@ -2,7 +2,7 @@
  * dwg.h
  *
  *  Created on: Mar 28, 2012
- *      Author: carlos
+ *      Author: caruizdiaz
  */
 
 #ifndef DWG_H_

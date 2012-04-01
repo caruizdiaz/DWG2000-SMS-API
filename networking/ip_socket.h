@@ -2,7 +2,7 @@
  * ip_socket.h
  *
  *  Created on: Nov 22, 2011
- *      Author: carlos
+ *      Author: caruizdiaz
  */
 
 #ifndef IP_SOCKET_H_
