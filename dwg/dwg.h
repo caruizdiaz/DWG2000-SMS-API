@@ -53,17 +53,7 @@ typedef struct dwg_sms_req
 	char content_length[2];
 	str_t content;
 
-} dwg_sms_req_t;
-
-typedef struct dwg_sms_res
-{
-	char count_of_number;
-	char number[24];
-	char port;
-	char result;
-	char count_of_slice;
-	char succeded_slices;
-} dwg_sms_res_t;
+} dwg_sms_request_t;
 
 typedef enum dwg_sms_result_code
 {
@@ -75,6 +65,28 @@ typedef enum dwg_sms_result_code
 	SMS_RC_PARTIAL_SUCCEED,
 	SMS_RC_OTHER_ERROR = 255
 } dwg_sms_result_code_t;
+
+typedef struct dwg_sms_res
+{
+	int count_of_number;
+	char number[24];
+	int port;
+	dwg_sms_result_code_t result;
+	int count_of_slice;
+	int succeded_slices;
+} dwg_sms_response_t;
+
+typedef struct dwg_port_status
+{
+	int port;
+	int status;
+} dwg_port_status_t;
+
+typedef struct dwg_ports_status
+{
+	int size;
+	dwg_port_status_t *status_array;
+} dwg_ports_status_t;
 
 #define DWG_TYPE_STATUS					7
 #define DWG_TYPE_STATUS_RESPONSE		8
@@ -96,12 +108,25 @@ typedef enum dwg_sms_result_code
 #define GET_MSG_OFFSET(_field_, _offset_, _input_) memcpy(_field_, &_input_[offset], sizeof(_field_)); \
 													_offset_ += sizeof(_field_);
 
+typedef void (*status_callback_fptr) (dwg_ports_status_t *status);
+typedef void (*msg_response_callback_fptr) (dwg_sms_response_t *res);
+
+typedef struct dwg_message_callback
+{
+	status_callback_fptr status_callback;
+	msg_response_callback_fptr msg_response_callback;
+
+} dwg_message_callback_t;
 
 void dwg_build_keep_alive(str_t *output);
 void dwg_build_sms(sms_t *sms, int port, str_t *output);
 void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output);
 void dwg_build_sms_ack(str_t *output);
+void dwg_build_sms_res_ack(str_t *output);
 dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body);
 void dwg_build_status_response(str_t *output);
+void dwg_send_sms(str_t *destination, str_t *message);
+void dwg_start_server(int port, dwg_message_callback_t *callbacks);
+str_t *dwg_process_message(str_t *input);
 
 #endif /* DWG_H_ */

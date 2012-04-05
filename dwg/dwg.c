@@ -7,18 +7,39 @@
  */
 
 #include "dwg.h"
+#include "dwg_server.h"
+#include "../networking/ip_socket.h"
 
 static void dwg_build_msg_header(int length, int type, str_t *output);
-static void dwg_serialize_sms_req(dwg_sms_req_t *msg, str_t *output);
+static void dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output);
 static int swap_bytes_32(int input);
 static short swap_bytes_16(short input);
 
+static dwg_message_callback_t *_callbacks	= NULL;
+
+void dwg_start_server(int port, dwg_message_callback_t *callbacks)
+{
+	ip_start_listener(port, dwg_server_gw_interactor, DIR_DUAL);
+
+	_callbacks	= callbacks;
+}
+
+void dwg_send_sms(str_t *destination, str_t *message)
+{
+	sms_t *sms	= malloc(sizeof(sms_t));
+
+	STR_COPY(sms->destination, (*destination));
+	STR_COPY(sms->content, (*message));
+
+	dwg_server_write_to_queue(sms);
+}
+
 void dwg_build_sms(sms_t *sms, int port, str_t *output)
 {
-	dwg_sms_req_t request;
+	dwg_sms_request_t request;
 	str_t body, header;
 
-	STR_ALLOC(body, (sizeof(dwg_sms_req_t) - sizeof(str_t)) + sms->content.len);
+	STR_ALLOC(body, (sizeof(dwg_sms_request_t) - sizeof(str_t)) + sms->content.len);
 
 	request.port			= port;
 	request.encoding		= DWG_ENCODING_ASCII;
@@ -43,6 +64,32 @@ void dwg_build_sms(sms_t *sms, int port, str_t *output)
 	memcpy(&output->s[header.len], body.s, body.len);
 
 //	hexdump(output->s, output->len);
+}
+
+void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
+{
+	str_t body;
+	int offset	= 0;
+	dwg_msg_des_header_t des_header = dwg_deserialize_message(input, &body);
+
+	response->count_of_number	= (int) body.s[offset];
+	offset++;
+
+	bzero(response->number, sizeof(response->number));
+	memcpy(response->number, &body.s[1], sizeof(response->number));
+	offset += sizeof(response->number);
+
+	response->port		= (int) body.s[offset];
+	offset++;
+
+	response->result	= (dwg_sms_result_code_t) body.s[offset];
+	offset++;
+
+	response->count_of_slice	= (int) body.s[offset];
+	offset++;
+
+	response->succeded_slices	= (int) body.s[offset];
+	offset++;
 }
 
 dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body)
@@ -102,27 +149,29 @@ void dwg_build_sms_ack(str_t *output)
 	memcpy(&output->s[header.len], &response, sizeof(char));
 }
 
+void dwg_build_sms_res_ack(str_t *output)
+{
+	str_t header;
+	char response	= SMS_RC_SUCCEED;
+
+	dwg_build_msg_header(1, DWG_TYPE_SEND_SMS_RESULT_RESP, &header);
+
+	STR_ALLOC((*output), header.len + 1);
+	output->len	= header.len + 1;
+
+	memcpy(output->s, header.s, header.len);
+	memcpy(&output->s[header.len], &response, sizeof(char));
+}
+
 void dwg_build_keep_alive(str_t *output)
 {
 	dwg_build_msg_header(0, DWG_TYPE_KEEP_ALIVE, output);
 }
 
-void dwg_deserialize_sms_res(str_t *input, dwg_sms_res_t *msg)
-{
-	int offset	= 0;
-
-	GET_MSG_OFFSET(msg->count_of_number, offset, input->s);
-	GET_MSG_OFFSET(msg->number, offset, input->s);
-	GET_MSG_OFFSET(msg->port, offset, input->s);
-	GET_MSG_OFFSET(msg->result, offset, input->s);
-	GET_MSG_OFFSET(msg->count_of_slice, offset, input->s);
-	GET_MSG_OFFSET(msg->succeded_slices, offset, input->s);
-}
-
-static void dwg_serialize_sms_req(dwg_sms_req_t *msg, str_t *output)
+static void dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output)
 {
 	int offset	= 0,
-		size	= sizeof(dwg_sms_req_t) - sizeof(str_t) /* str_t content */ + msg->content.len;
+		size	= sizeof(dwg_sms_request_t) - sizeof(str_t) /* str_t content */ + msg->content.len;
 
 	output->s	= malloc(size);
 //	output->len	= size;
@@ -221,4 +270,93 @@ void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output)
 	GET_MSG_OFFSET(output->ID.serial_number, offset, input->s);
 	GET_MSG_OFFSET(output->type, offset, input->s);
 	GET_MSG_OFFSET(output->flag, offset, input->s);
+}
+
+str_t *dwg_process_message(str_t *input)
+{
+	str_t *output		= malloc(sizeof(str_t)),
+		  body;
+    dwg_msg_des_header_t des_header;
+
+    LOG(L_DEBUG, "%s: received %d bytes\n", __FUNCTION__, input->len);
+
+	des_header	= dwg_deserialize_message(input, &body);
+
+	switch(des_header.type)
+	{
+		case DWG_TYPE_KEEP_ALIVE:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_KEEP_ALIVE\n", __FUNCTION__);
+			break;
+		case DWG_TYPE_STATUS:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_STATUS\n", __FUNCTION__);
+
+			int index;
+			dwg_ports_status_t *ports_status	= malloc(sizeof(dwg_ports_status_t));
+
+			ports_status->size			= (int) body.s[0];
+			ports_status->status_array	= malloc(sizeof(dwg_port_status_t) * ports_status->size);
+
+			for (index = 0; index < ports_status->size; index++)
+			{
+				ports_status->status_array[index].port	= index;
+				ports_status->status_array[index].status = (int) body.s[index + 1];
+			}
+
+			_callbacks->status_callback(ports_status);
+
+/*
+			LOG(L_DEBUG, "\tNumber of ports: %d\n", (int) body.s[0]);
+			LOG(L_DEBUG, "\t\tPORT0: %d\n", (int) body.s[1]);
+			LOG(L_DEBUG, "\t\tPORT1: %d\n", (int) body.s[2]);
+			LOG(L_DEBUG, "\t\tPORT2: %d\n", (int) body.s[3]);
+			LOG(L_DEBUG, "\t\tPORT3: %d\n", (int) body.s[4]);
+			LOG(L_DEBUG, "\t\tPORT4: %d\n", (int) body.s[5]);
+			LOG(L_DEBUG, "\t\tPORT5: %d\n", (int) body.s[6]);
+			LOG(L_DEBUG, "\t\tPORT6: %d\n", (int) body.s[7]);
+			LOG(L_DEBUG, "\t\tPORT7: %d\n", (int) body.s[8]);
+*/
+			dwg_build_status_response(output);
+			break;
+		case DWG_TYPE_SEND_SMS:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS\n", __FUNCTION__);
+			break;
+		case DWG_TYPE_SEND_SMS_RESP:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESP\n", __FUNCTION__);
+
+			if ((int) body.s[0] == 0)
+			{
+				LOG(L_DEBUG, "%s: SMS was received by the gw\n", __FUNCTION__);
+			}
+			else
+			{
+				LOG(L_ERROR, "%s: Error sending sms\n", __FUNCTION__);
+				hexdump(output->s, output->len);
+			}
+
+			dwg_build_sms_ack(output);
+
+			break;
+		case DWG_TYPE_SEND_SMS_RESULT:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESULT\n", __FUNCTION__);
+
+			dwg_sms_response_t	*response	= malloc(sizeof(dwg_sms_response_t));
+			dwg_deserialize_sms_response(input, response);
+
+			_callbacks->msg_response_callback(response);
+
+			break;
+		case DWG_TYPE_SEND_SMS_RESULT_RESP:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESULT_RESP\n", __FUNCTION__);
+			dwg_build_sms_res_ack(output);
+			break;
+		default:
+			LOG(L_DEBUG, "%s: Received unknown code %d\n", __FUNCTION__, des_header.type);
+
+			hexdump(input->s, input->len);
+			break;
+	}
+
+//	hexdump(output->s, output->len);
+
+	return output;
 }

@@ -22,7 +22,6 @@
 #include "../util.h"
 
 #define BUFFER_SIZE 	5000
-#define HEADER_SIZE		sizeof(int) * 2
 
 typedef enum sock_direction { DIR_DUAL, DIR_SINGLE } sock_direction_t;
 

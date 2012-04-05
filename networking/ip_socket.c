@@ -8,9 +8,9 @@
 #include "ip_socket.h"
 #include "../util.h"
 
-static void *bytes_listener(void *param);
+//static void *bytes_listener(void *param);
 static void *string_listener(void *param);
-static void *async_processing(void *param);
+//static void *async_processing(void *param);
 
 pthread_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_t direction)
 {
@@ -92,8 +92,6 @@ static void *string_listener(void *param)
 
 	for(;;)
 	{
-		char buffer[BUFFER_SIZE];
-		int bytes_read 		= 0;
 		pthread_t thread;
 
 		sin_size = sizeof(struct sockaddr_in);
@@ -118,3 +116,4 @@ static void *string_listener(void *param)
 
 	return NULL;
 }
+
