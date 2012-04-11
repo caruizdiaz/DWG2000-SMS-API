@@ -76,6 +76,17 @@ typedef struct dwg_sms_res
 	int succeded_slices;
 } dwg_sms_response_t;
 
+typedef struct dwg_sms_received
+{
+	char number[24];
+	int type;
+	int port;
+	char timestamp[16];
+	int timezone;
+	int encoding;
+	str_t message;
+} dwg_sms_received_t;
+
 typedef struct dwg_port_status
 {
 	int port;
@@ -95,6 +106,8 @@ typedef struct dwg_ports_status
 #define DWG_TYPE_SEND_SMS_RESP			2
 #define DWG_TYPE_SEND_SMS_RESULT		3
 #define DWG_TYPE_SEND_SMS_RESULT_RESP	4
+#define DWG_TYPE_RECV_SMS				5
+#define DWG_TYPE_RECV_SMS_RESULT		6
 
 #define DWG_ENCODING_ASCII			0
 #define DWG_ENCODING_UNICODE		1
@@ -108,13 +121,18 @@ typedef struct dwg_ports_status
 #define GET_MSG_OFFSET(_field_, _offset_, _input_) memcpy(_field_, &_input_[offset], sizeof(_field_)); \
 													_offset_ += sizeof(_field_);
 
+#define DWG_CALL_IF_NOT_NULL(_func_, _param_) if (_func_!= NULL) \
+												_func_(_param_);
+
 typedef void (*status_callback_fptr) (dwg_ports_status_t *status);
 typedef void (*msg_response_callback_fptr) (dwg_sms_response_t *res);
+typedef void (*msg_sms_recv_callback_fptr) (dwg_sms_received_t *recv);
 
 typedef struct dwg_message_callback
 {
 	status_callback_fptr status_callback;
 	msg_response_callback_fptr msg_response_callback;
+	msg_sms_recv_callback_fptr msg_sms_recv_callback;
 
 } dwg_message_callback_t;
 
@@ -128,5 +146,7 @@ void dwg_build_status_response(str_t *output);
 void dwg_send_sms(str_t *destination, str_t *message);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
 str_t *dwg_process_message(str_t *input);
+void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);
+void dwg_build_sms_recv_ack(str_t *output);
 
 #endif /* DWG_H_ */

@@ -90,15 +90,15 @@ void *dwg_server_gw_interactor(void *param)
 			_sms_queue.sms	= NULL;
 		}
 		pthread_mutex_unlock(&_sms_queue.lock);
-
-		if (to_gw.len == 0 && time_elapsed >= KEEP_ALIVE_INTERVAL)
+/*
+		if (to_gw.len == 0 && time_elapsed >= KEEP_ALIVE_INTERVAL * READ_INTERVAL)
 		{
 			LOG(L_DEBUG, "%s: sending keep alive request\n", __FUNCTION__);
 
 			dwg_build_keep_alive(&to_gw);
 			time_elapsed	= 0;
 		}
-
+*/
 //		hexdump(to_gw.s, to_gw.len);
 
 		if (to_gw.len > 0 && (written = write(client_fd, to_gw.s, to_gw.len)) != to_gw.len)

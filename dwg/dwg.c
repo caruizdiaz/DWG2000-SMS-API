@@ -20,7 +20,6 @@ static dwg_message_callback_t *_callbacks	= NULL;
 void dwg_start_server(int port, dwg_message_callback_t *callbacks)
 {
 	ip_start_listener(port, dwg_server_gw_interactor, DIR_DUAL);
-
 	_callbacks	= callbacks;
 }
 
@@ -92,6 +91,45 @@ void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
 	offset++;
 }
 
+void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received)
+{
+	int offset	= 0;
+
+	bzero(received->number, sizeof(received->number));
+	memcpy(received->number, msg_body->s, sizeof(received->number));
+
+	offset += sizeof(received->number);
+
+	received->type	= (int) msg_body->s[offset];
+	offset++;
+
+	received->port	= (int) msg_body->s[offset];
+	offset++;
+
+	bzero(received->timestamp, sizeof(received->timestamp));
+	memcpy(received->timestamp, &msg_body->s[offset], sizeof(received->timestamp) - 1 /* exclude the null terminator extra space*/);
+	offset += sizeof(received->timestamp) - 1;
+
+	received->timezone	= (int) msg_body->s[offset];
+	offset++;
+
+	received->encoding	= (int) msg_body->s[offset];
+	offset++;
+
+	short aux	= 0;
+	memcpy(&aux, &msg_body->s[offset], 2);
+	aux	= swap_bytes_16(aux);
+
+	offset += 2;
+
+	STR_ALLOC(received->message, aux + 1);
+	received->message.len--;
+
+	memcpy(received->message.s, &msg_body->s[offset], aux);
+	received->message.s[aux] = '\0';
+
+}
+
 dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body)
 {
 	dwg_msg_header_t header;
@@ -155,6 +193,20 @@ void dwg_build_sms_res_ack(str_t *output)
 	char response	= SMS_RC_SUCCEED;
 
 	dwg_build_msg_header(1, DWG_TYPE_SEND_SMS_RESULT_RESP, &header);
+
+	STR_ALLOC((*output), header.len + 1);
+	output->len	= header.len + 1;
+
+	memcpy(output->s, header.s, header.len);
+	memcpy(&output->s[header.len], &response, sizeof(char));
+}
+
+void dwg_build_sms_recv_ack(str_t *output)
+{
+	str_t header;
+	char response	= SMS_RC_SUCCEED;
+
+	dwg_build_msg_header(1, DWG_TYPE_RECV_SMS_RESULT, &header);
 
 	STR_ALLOC((*output), header.len + 1);
 	output->len	= header.len + 1;
@@ -302,7 +354,7 @@ str_t *dwg_process_message(str_t *input)
 				ports_status->status_array[index].status = (int) body.s[index + 1];
 			}
 
-			_callbacks->status_callback(ports_status);
+			DWG_CALL_IF_NOT_NULL(_callbacks->status_callback, ports_status);
 
 /*
 			LOG(L_DEBUG, "\tNumber of ports: %d\n", (int) body.s[0]);
@@ -342,12 +394,24 @@ str_t *dwg_process_message(str_t *input)
 			dwg_sms_response_t	*response	= malloc(sizeof(dwg_sms_response_t));
 			dwg_deserialize_sms_response(input, response);
 
-			_callbacks->msg_response_callback(response);
+			DWG_CALL_IF_NOT_NULL(_callbacks->msg_response_callback, response);
+
+			dwg_build_sms_recv_ack(output);
 
 			break;
 		case DWG_TYPE_SEND_SMS_RESULT_RESP:
 			LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESULT_RESP\n", __FUNCTION__);
 			dwg_build_sms_res_ack(output);
+			break;
+		case DWG_TYPE_RECV_SMS:
+			LOG(L_DEBUG, "%s: received DWG_TYPE_RECV_SMS\n", __FUNCTION__);
+
+			dwg_sms_received_t *received	= malloc(sizeof(dwg_sms_received_t));
+
+			dwg_deserialize_sms_received(&body, received);
+
+			DWG_CALL_IF_NOT_NULL(_callbacks->msg_sms_recv_callback, received);
+
 			break;
 		default:
 			LOG(L_DEBUG, "%s: Received unknown code %d\n", __FUNCTION__, des_header.type);

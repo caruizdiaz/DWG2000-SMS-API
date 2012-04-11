@@ -10,7 +10,10 @@
 #include "dwg/dwg.h"
 #include "networking/ip_socket.h"
 
-
+void new_sms_handler(dwg_sms_received_t *sms)
+{
+	LOG(L_DEBUG, "new sms from %s. Len: %d, Text: %s\n", sms->number, sms->message.len, sms->message.s);
+}
 
 void status_handler(dwg_ports_status_t *status)
 {
@@ -22,13 +25,11 @@ void status_handler(dwg_ports_status_t *status)
 	{
 		LOG(L_DEBUG, "\tPort%d: %d\n", index, status->status_array[index].status);
 	}
-
-	printf("done\n");
 }
 
 void msg_response_handler(dwg_sms_response_t *response)
 {
-	LOG(L_DEBUG, "\tresponse from %s\n", response->number);
+	LOG(L_DEBUG, "\tResponse from %s\n", response->number);
 }
 
 int main(int argc, char** argv)
@@ -36,7 +37,8 @@ int main(int argc, char** argv)
 
 	dwg_message_callback_t callbacks	= {
 				.status_callback = status_handler,
-				.msg_response_callback	= msg_response_handler
+				.msg_response_callback	= msg_response_handler,
+				.msg_sms_recv_callback	= new_sms_handler
 	};
 
 	dwg_start_server(7008, &callbacks);
