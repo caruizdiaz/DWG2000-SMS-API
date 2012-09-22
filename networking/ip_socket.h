@@ -21,12 +21,17 @@
 
 #include "../util.h"
 
-#define BUFFER_SIZE 	5000
+typedef struct listener_data
+{
+	int sockfd;
+	pthread_t thread;
+
+} listener_data_t;
 
 typedef enum sock_direction { DIR_DUAL, DIR_SINGLE } sock_direction_t;
 
 typedef void * (*dflt_func_ptr_t) (void *);
-pthread_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_t direction);
-void ip_stop_listener(pthread_t *listener_thread);
+listener_data_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_t direction);
+void ip_stop_listener(listener_data_t *ldata);
 
 #endif /* IP_SOCKET_H_ */

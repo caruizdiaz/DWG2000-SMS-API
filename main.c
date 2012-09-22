@@ -34,6 +34,7 @@ void msg_response_handler(dwg_sms_response_t *response)
 
 int main(int argc, char** argv)
 {
+	printf("ok");
 
 	dwg_message_callback_t callbacks	= {
 				.status_callback = status_handler,
@@ -45,6 +46,8 @@ int main(int argc, char** argv)
 
 	str_t des = { "0981146623", 10 };
 	str_t msg = { "hola", 4 };
+
+	printf("yep");
 
 	for(;;)
 	{

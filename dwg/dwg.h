@@ -149,4 +149,7 @@ str_t *dwg_process_message(str_t *input);
 void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);
 void dwg_build_sms_recv_ack(str_t *output);
 
+void print_something(const char *str);
+
+
 #endif /* DWG_H_ */

@@ -8,23 +8,29 @@
 #include "ip_socket.h"
 #include "../util.h"
 
-//static void *bytes_listener(void *param);
 static void *string_listener(void *param);
-//static void *async_processing(void *param);
 
-pthread_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_t direction)
+void ip_stop_listener(listener_data_t *ldata)
 {
-	int opt = 1, sock_fd = 0, offset = 0;
-	struct sockaddr_in server;
-	pthread_t *listener_thread	= NULL;
+	close(ldata->sockfd);
+	pthread_cancel(ldata->thread);
+}
 
-	if ((sock_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+listener_data_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_t direction)
+{
+	int opt = 1, offset = 0;
+	struct sockaddr_in server;
+	listener_data_t *ldata	= malloc(sizeof(listener_data_t));
+
+	ldata->sockfd = -1;
+
+	if ((ldata->sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		LOG(L_ERROR, "%s | socket(): %s", __FUNCTION__, strerror(errno));
 		return NULL;
 	}
 
-	setsockopt (sock_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	setsockopt (ldata->sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
 	server.sin_family 		= AF_INET;
 	server.sin_port 		= htons(port);
@@ -32,19 +38,17 @@ pthread_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_
 
 	bzero(&(server.sin_zero), 8);
 
-	if(bind(sock_fd, (struct sockaddr *) &server, sizeof(struct sockaddr)) == -1)
+	if(bind(ldata->sockfd, (struct sockaddr *) &server, sizeof(struct sockaddr)) == -1)
 	{
 		LOG(L_ERROR, "%s | bind(): %s\n", __FUNCTION__, strerror(errno));
 		return NULL;
 	}
 
-	if(listen(sock_fd, 5000) == -1)
+	if(listen(ldata->sockfd, 5000) == -1)
 	{
 		LOG(L_ERROR, "%s: %s\n", __FUNCTION__, strerror(errno));
 		return NULL;
 	}
-
-	listener_thread		= malloc(sizeof(pthread_t));
 
 	/*
 	 * serialize parameters to pass to the listener thread. The memory must be dyn-allocated to guarantee
@@ -53,26 +57,26 @@ pthread_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_direction_
 	 */
 	char *param	=	 malloc(sizeof(int) + sizeof(dflt_func_ptr_t) + sizeof(sock_direction_t));
 
-	memcpy(param, &sock_fd, sizeof(int));
+	memcpy(param, &ldata->sockfd, sizeof(int));
 	offset	+= sizeof(int);
 	memcpy(&param[offset], &callback, sizeof(dflt_func_ptr_t));
 	offset	+= sizeof(dflt_func_ptr_t);
 
-	if (pthread_create(listener_thread, NULL, string_listener, (void *) param) != 0)
+	if (pthread_create(&ldata->thread, NULL, string_listener, (void *) param) != 0)
 	{
 		LOG(L_ERROR, "%s | pthread_create(): %s\n", __FUNCTION__, strerror(errno));
 		return NULL;
 	}
 
-	return listener_thread;
+	return ldata;
 }
-
+/*
 void ip_stop_listener(pthread_t *listener_thread)
 {
 	if (listener_thread != NULL)
 		pthread_kill(listener_thread, 2);
 }
-
+*/
 static void *string_listener(void *param)
 {
 	char *params					= param;

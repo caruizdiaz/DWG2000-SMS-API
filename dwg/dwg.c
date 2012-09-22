@@ -17,18 +17,115 @@ static short swap_bytes_16(short input);
 
 static dwg_message_callback_t *_callbacks	= NULL;
 
+typedef void (*func) (int a, str_t *b);
+typedef void (*func2) (int a, dwg_ports_status_t *b);
+typedef void (*func3) (dwg_ports_status_t *b);
+
+void make_cb4(func3 f3)
+{
+	printf("----->\n");
+
+	dwg_ports_status_t	*sts = malloc(sizeof(dwg_ports_status_t));
+	sts->size = 3;
+	//printf("yep\n");
+
+	sts->status_array		= (dwg_port_status_t *) malloc(sizeof(dwg_port_status_t) * sts->size);
+	sts->status_array->port = 123;
+	sts->status_array->status = 999;
+
+	sts->status_array[1].port = 111;
+	sts->status_array[1].status = 3333;
+
+	sts->status_array[2].port = 222;
+	sts->status_array[2].status = 3333;
+
+	sts->status_array[3].port = 333;
+	sts->status_array[3].status = 3333;
+
+	printf("yup\n");
+	f3(sts);
+	printf("yong!!\n");
+}
+
+void make_cb3(dwg_ports_status_t *s)
+{
+	s->size	= 3;
+	printf("A!\n");
+
+	s->status_array		= (dwg_port_status_t *) malloc(sizeof(dwg_port_status_t *) * s->size);
+	s->status_array->port = 123;
+	s->status_array->status = 999;
+
+	s->status_array[1].port = 111;
+	s->status_array[1].status = 3333;
+/*
+	s->status_array[2].port = 222;
+	s->status_array[2].status = 444; */
+
+	printf("done A!\n");
+}
+
+void make_cb2(func2 ptr)
+{
+	dwg_ports_status_t *s = malloc(sizeof (dwg_ports_status_t));
+	s->size	= 3;
+	printf("A\n");
+
+	s->status_array		= (dwg_port_status_t *) malloc(sizeof(dwg_port_status_t *) * s->size);
+	s->status_array->port = 123;
+	s->status_array->status = 999;
+
+	s->status_array[1].port = 111;
+	s->status_array[1].status = 3333;
+
+	s->status_array[2].port = 222;
+	s->status_array[2].status = 444;
+
+	printf("done A\n");
+
+	ptr(444, s);
+}
+void make_cb(func ptr)
+{
+	str_t *s =  malloc(sizeof(str_t));
+	//str_t s;
+
+	STR_ALLOC((*s), 10);
+	memcpy(s->s, "hol!\0", 5);
+	s->len = 4;
+
+	ptr(123, s);
+}
+
+void print_something(const char *str)
+{
+	printf("-> %s\n", str);
+}
+
+listener_data_t *listener_data;
+
 void dwg_start_server(int port, dwg_message_callback_t *callbacks)
 {
-	ip_start_listener(port, dwg_server_gw_interactor, DIR_DUAL);
+	listener_data = ip_start_listener(port, dwg_server_gw_interactor, DIR_DUAL);
+	LOG(L_DEBUG, "status: %p\n", callbacks->status_callback);
+	LOG(L_DEBUG, "rcv: %p\n", callbacks->msg_sms_recv_callback);
+	LOG(L_DEBUG, "resp: %p\n", callbacks->msg_response_callback);
+
 	_callbacks	= callbacks;
+}
+
+void dwg_stop_server()
+{
+	if (listener_data != NULL)
+		ip_stop_listener(listener_data);
 }
 
 void dwg_send_sms(str_t *destination, str_t *message)
 {
 	sms_t *sms	= malloc(sizeof(sms_t));
 
-	STR_COPY(sms->destination, (*destination));
-	STR_COPY(sms->content, (*message));
+	str_copy(sms->destination, (*destination));
+	str_copy(sms->content, (*message));
 
 	dwg_server_write_to_queue(sms);
 }
@@ -305,10 +402,10 @@ static short swap_bytes_16(short input)
 
 static int swap_bytes_32(int input)
 {
-	return ((input>>24)&0xff) | // move byte 3 to byte 0
-            ((input<<8)&0xff0000) | // move byte 1 to byte 2
-            ((input>>8)&0xff00) | // move byte 2 to byte 1
-            ((input<<24)&0xff000000); // byte 0 to byte 3
+	return ((input>>24)&0xff) | 		// move byte 3 to byte 0
+            ((input<<8)&0xff0000) | 	// move byte 1 to byte 2
+            ((input>>8)&0xff00) | 		// move byte 2 to byte 1
+            ((input<<24)&0xff000000); 	// byte 0 to byte 3
 }
 
 
@@ -326,8 +423,9 @@ void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output)
 
 str_t *dwg_process_message(str_t *input)
 {
-	str_t *output		= malloc(sizeof(str_t)),
+	str_t *output			= malloc(sizeof(str_t)),
 		  body;
+	static int heart_beat	= 0;
     dwg_msg_des_header_t des_header;
 
     LOG(L_DEBUG, "%s: received %d bytes\n", __FUNCTION__, input->len);
