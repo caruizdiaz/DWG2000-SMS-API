@@ -143,7 +143,7 @@ void dwg_build_sms_ack(str_t *output);
 void dwg_build_sms_res_ack(str_t *output);
 dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body);
 void dwg_build_status_response(str_t *output);
-void dwg_send_sms(str_t *destination, str_t *message);
+void dwg_send_sms(str_t *destination, str_t *message, unsigned int port);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
 str_t *dwg_process_message(str_t *input);
 void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);

@@ -49,11 +49,11 @@ int main(int argc, char** argv)
 
 	printf("yep");
 
-	for(;;)
+/*	for(;;)
 	{
 		getchar();
 		dwg_send_sms(&des, &msg);
-	}
+	}*/
 
 }
 

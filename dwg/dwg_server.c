@@ -35,23 +35,35 @@ typedef struct sms_outqueue
 
 } sms_outqueue_t;
 
-static sms_outqueue_t *_sms_queue;
-static pthread_mutex_t _mutex	= PTHREAD_MUTEX_INITIALIZER;
-static int _socket_fd			= -1;
+static sms_outqueue_t *_sms_queue	= NULL;
+static pthread_mutex_t _mutex		= PTHREAD_MUTEX_INITIALIZER;
+static int _socket_fd				= -1;
 
 void dwg_initilize_server()
 {
+	printf("init\n");
 	_sms_queue	= malloc(sizeof(sms_outqueue_t));
 	clist_init(_sms_queue, next, prev);
+	printf("init done\n");
 }
 
-void dwg_server_write_to_queue(sms_t *sms)
+void dwg_server_write_to_queue(sms_t *sms, unsigned int port)
 {
 	pthread_mutex_lock(&_mutex);
+	printf("insert\n");
+	if (_sms_queue == NULL)
+	{
+		LOG(L_ERROR, "%s: SMS queue not initialized\n", __FUNCTION__);
+		return;
+	}
 
 	sms_outqueue_t *item	= malloc(sizeof(sms_outqueue_t));
-	clist_append(_sms_queue, item, next, prev);
 
+	item->gw_port	= port;
+	item->sms		= sms;
+
+	clist_append(_sms_queue, item, next, prev);
+	printf("insert done\n");
 	pthread_mutex_unlock(&_mutex);
 }
 
@@ -62,6 +74,7 @@ void *dwg_server_gw_interactor(void *param)
 		bytes_read 			= 0,
 		time_elapsed		= 0;
 	sms_outqueue_t	*item	= NULL;
+	_bool keep_alive		= FALSE;
 
 	_socket_fd	= client_fd;
 
@@ -85,9 +98,18 @@ void *dwg_server_gw_interactor(void *param)
 
 		if (bytes_read < 0)
 		{
-			//LOG(L_DEBUG, "%s: Nothing to read\n", __FUNCTION__);
 			sleep(READ_INTERVAL);
 			time_elapsed	+= READ_INTERVAL;
+			keep_alive		= FALSE;
+
+			if (time_elapsed >= KEEP_ALIVE_INTERVAL)
+			{
+				dwg_build_keep_alive(&to_gw);
+				time_elapsed	= 0;
+				keep_alive		= TRUE;
+			}
+
+			LOG(L_DEBUG, "%s: Nothing to read: %d\n", __FUNCTION__, time_elapsed);
 		}
 		else if (bytes_read == 0)
 		{
@@ -99,21 +121,34 @@ void *dwg_server_gw_interactor(void *param)
 			from_gw.s	= buffer;
 			from_gw.len	= bytes_read;
 
+			hexdump(from_gw.s, from_gw.len);
+
 			to_gw	= *((str_t *) dwg_process_message(&from_gw));
 		}
 
-		pthread_mutex_lock(&_mutex);
-
-		clist_foreach(_sms_queue, item, next)
+		if (!keep_alive)
 		{
-			dwg_build_sms(item->sms, item->gw_port, &to_gw);
+			pthread_mutex_lock(&_mutex);
+			printf("reading\n");
+			clist_foreach(_sms_queue, item, next)
+			{
+				dwg_build_sms(item->sms, item->gw_port, &to_gw);
 
-			LOG(L_DEBUG, "%s: Sending sms to [%.*s], using port %d\n", __FUNCTION__, item->sms->destination.len,
-																				 item->sms->destination.s,
-																				 item->gw_port);
+				LOG(L_DEBUG, "%s: Sending sms to [%.*s], using port %d\n", __FUNCTION__, item->sms->destination.len,
+																					 item->sms->destination.s,
+																					 item->gw_port);
+
+				//free(item->sms->content.s);
+				//free(item->sms->destination.s);
+				//free(item);
+
+				clist_rm(item, next, prev);
+
+				sleep(1);
+			}
+			printf("reading done\n");
+			pthread_mutex_unlock(&_mutex);
 		}
-
-		pthread_mutex_unlock(&_mutex);
 /*
 		if (to_gw.len == 0 && time_elapsed >= KEEP_ALIVE_INTERVAL * READ_INTERVAL)
 		{
@@ -123,7 +158,7 @@ void *dwg_server_gw_interactor(void *param)
 			time_elapsed	= 0;
 		}
 */
-//		hexdump(to_gw.s, to_gw.len);
+		hexdump(to_gw.s, to_gw.len);
 
 		if (to_gw.len > 0 && (written = write(client_fd, to_gw.s, to_gw.len)) != to_gw.len)
 		{
