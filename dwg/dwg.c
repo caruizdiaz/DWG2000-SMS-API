@@ -24,6 +24,7 @@ typedef struct dwg_hbp
 } dwg_hbp_t;
 
 static void dwg_build_msg_header(int length, int type, str_t *output);
+static void dwg_build_msg_header_with_serial(int length, int type, int serial, str_t *output);
 static void dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output);
 static int swap_bytes_32(int input);
 static short swap_bytes_16(short input);
@@ -132,9 +133,10 @@ void dwg_start_server(int port, dwg_message_callback_t *callbacks)
 
 void dwg_stop_server()
 {
-
 	if (listener_data != NULL)
 		ip_stop_listener(listener_data);
+
+	dwg_kill_connection();
 }
 
 void dwg_send_sms(str_t *destination, str_t *message, unsigned int port)
@@ -183,7 +185,8 @@ void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
 {
 	str_t body;
 	int offset	= 0;
-	dwg_msg_des_header_t des_header = dwg_deserialize_message(input, &body);
+	//dwg_msg_des_header_t des_header = dwg_deserialize_message(input, &body);
+	dwg_deserialize_message(input, &body);
 
 	response->count_of_number	= (int) body.s[offset];
 	offset++;
@@ -267,7 +270,7 @@ static void get_messages(str_t *input, dwg_hbp_t *hbp)
 //		printf("hdr len: %d | type: %d\n", hbp_item->hdr.length, hbp_item->hdr.type);
 //		hexdump(current_offset->s, current_offset->len);
 
-		hexdump(current_offset->s, DWG_MSG_HEADER_SIZE + hbp_item->hdr.length);
+//		hexdump(current_offset->s, DWG_MSG_HEADER_SIZE + hbp_item->hdr.length);
 
 		clist_append(hbp, hbp_item, next, prev);
 
@@ -285,21 +288,20 @@ dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body)
 	dwg_msg_des_header_t des_header;
 	//int length, type, result;
 
-	printf("hdr!!!\n");
+/*	printf("hdr!!!\n");
 	hexdump(input->s, 24);
-
+*/
 	dwg_get_msg_header(input, &header);
-
-
 
 	memcpy(&des_header.length, header.length, sizeof(header.length));
 	memcpy(&des_header.type, header.type, sizeof(header.type));
+	memcpy(&des_header.serial, header.ID.serial_number, sizeof(header.ID.serial_number));
 
 	des_header.length	= swap_bytes_32(des_header.length);
 	des_header.type		= swap_bytes_16(des_header.type);
 
-	printf("length: %d\n", des_header.length);
-	printf("type: %d\n", des_header.type);
+//	printf("length: %d\n", des_header.length);
+//	printf("type: %d\n", des_header.type);
 //	printf("A\n");
 	STR_ALLOC((*body), des_header.length);
 
@@ -316,12 +318,27 @@ dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body)
 	return des_header;
 }
 
-void dwg_build_status_response(str_t *output)
+void dwg_build_auth_response(dwg_msg_des_header_t *original_hdr, str_t *output)
 {
 	str_t header;
 	char response	= SMS_RC_SUCCEED;
 
-	dwg_build_msg_header(1, DWG_TYPE_STATUS_RESPONSE, &header);
+	dwg_build_msg_header_with_serial(1, DWG_TYPE_RECV_AUTH_RESP, original_hdr->serial, &header);
+
+	STR_ALLOC((*output), header.len + 1);
+	output->len	= header.len + 1;
+
+	memcpy(output->s, header.s, header.len);
+	memcpy(&output->s[header.len], &response, sizeof(char));
+
+}
+
+void dwg_build_status_response(dwg_msg_des_header_t *original_hdr, str_t *output)
+{
+	str_t header;
+	char response	= SMS_RC_SUCCEED;
+
+	dwg_build_msg_header_with_serial(1, DWG_TYPE_STATUS_RESPONSE, original_hdr->serial, &header);
 
 	STR_ALLOC((*output), header.len + 1);
 	output->len	= header.len + 1;
@@ -335,12 +352,12 @@ void dwg_build_status_response(str_t *output)
 //	hexdump(output->s, output->len);
 }
 
-void dwg_build_sms_ack(str_t *output)
+void dwg_build_sms_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 {
 	str_t header;
 	char response	= SMS_RC_SUCCEED;
 
-	dwg_build_msg_header(1, DWG_TYPE_SEND_SMS_RESP, &header);
+	dwg_build_msg_header_with_serial(1, DWG_TYPE_SEND_SMS_RESP, original_hdr->serial, &header);
 
 	STR_ALLOC((*output), header.len + 1);
 	output->len	= header.len + 1;
@@ -349,12 +366,12 @@ void dwg_build_sms_ack(str_t *output)
 	memcpy(&output->s[header.len], &response, sizeof(char));
 }
 
-void dwg_build_sms_res_ack(str_t *output)
+void dwg_build_sms_res_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 {
 	str_t header;
 	char response	= SMS_RC_SUCCEED;
 
-	dwg_build_msg_header(1, DWG_TYPE_SEND_SMS_RESULT_RESP, &header);
+	dwg_build_msg_header_with_serial(1, DWG_TYPE_SEND_SMS_RESULT_RESP, original_hdr->serial, &header);
 
 	STR_ALLOC((*output), header.len + 1);
 	output->len	= header.len + 1;
@@ -363,12 +380,12 @@ void dwg_build_sms_res_ack(str_t *output)
 	memcpy(&output->s[header.len], &response, sizeof(char));
 }
 
-void dwg_build_sms_recv_ack(str_t *output)
+void dwg_build_sms_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 {
 	str_t header;
 	char response	= SMS_RC_SUCCEED;
 
-	dwg_build_msg_header(1, DWG_TYPE_RECV_SMS_RESULT, &header);
+	dwg_build_msg_header_with_serial(1, DWG_TYPE_RECV_SMS_RESULT, original_hdr->serial, &header);
 
 	STR_ALLOC((*output), header.len + 1);
 	output->len	= header.len + 1;
@@ -406,8 +423,15 @@ static void dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output)
 
 static void dwg_build_msg_header(int length, int type, str_t *output)
 {
+	//int serial	= rand() % 1000;
+	dwg_build_msg_header_with_serial(length, type, swap_bytes_32(rand() % 1000), output);
+}
+
+static void dwg_build_msg_header_with_serial(int length, int type, int serial, str_t *output)
+{
 	dwg_msg_header_t header;
-	int offset	= 0;
+	int offset = 0;
+	short type_16 = 0;
 
 	STR_ALLOC((*output), sizeof(dwg_msg_header_t));
 
@@ -418,32 +442,36 @@ static void dwg_build_msg_header(int length, int type, str_t *output)
 	header.ID.MAC[1]	= 0x1f;
 	header.ID.MAC[2]	= 0xd6;
 	header.ID.MAC[3]	= 0xc7;
-	header.ID.MAC[4]	= 0x0d;
-	header.ID.MAC[5]	= 0xb2;
+	header.ID.MAC[4]	= 0x6e;
+	header.ID.MAC[5]	= 0x7e;
 	header.ID.MAC[6]	= 0;
 	header.ID.MAC[7]	= 0;
+//00 1f d6 c7 6e 7e
 
 	bzero(header.ID.time, sizeof(header.ID.time));
 	bzero(header.ID.serial_number, sizeof(header.ID.serial_number));
 
-	header.ID.serial_number[0] = 0x0;
+/*	header.ID.serial_number[0] = 0x0;
 	header.ID.serial_number[1] = 0x0;
-	header.ID.serial_number[2] = 0x3f;
-	header.ID.serial_number[3] = 0x3d;
+	header.ID.serial_number[2] = 0x0;
+	header.ID.serial_number[3] = 0x0d;*/
+	//printf("serial-> %d\n", serial);
+	//memcpy(header.ID.serial_number, &serial, sizeof(header.ID.serial_number));
 
+    // 36 f7 18 d0
 	// 0d 1f 76 b6
-	header.ID.time[0] = 0x0d;
-	header.ID.time[1] = 0x1f;
-	header.ID.time[2] = 0x76;
-	header.ID.time[3] = 0xb6;
+	header.ID.time[0] = 0x37;
+	header.ID.time[1] = 0xf;
+	header.ID.time[2] = 0xf;
+	header.ID.time[3] = 0xf;
 
-	int serial_32 = swap_bytes_32(6);
-	length	= swap_bytes_32(length);
-	short type_16	= swap_bytes_16(type);
+	//serial	 	= swap_bytes_32(serial);
+	length		= swap_bytes_32(length);
+	type_16		= swap_bytes_16(type);
 
 	memcpy(header.length, &length, sizeof(header.length));
 	memcpy(header.type, &type_16, sizeof(header.type));
-	memcpy(header.ID.serial_number, &serial_32, sizeof(header.ID.serial_number));
+	memcpy(header.ID.serial_number, &serial, sizeof(header.ID.serial_number));
 
 	ADD_MSG_OFFSET(header.length, offset, output->s);
 	//printf("offset: %d\n", offset);
@@ -486,11 +514,10 @@ void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output)
 	GET_MSG_OFFSET(output->flag, offset, input->s);
 }
 
-void dwg_process_message(str_t *input, str_t* output)
+
+void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 {
-//	str_t *output			= malloc(sizeof(str_t));
-//		  body;
-  //  dwg_msg_des_header_t des_header;
+	dwg_outqueue_t *output	= NULL;
     dwg_hbp_t	*hbp		= malloc(sizeof(dwg_hbp_t));
     dwg_hbp_t	*item		= NULL;
 
@@ -498,12 +525,11 @@ void dwg_process_message(str_t *input, str_t* output)
 
     get_messages(input, hbp);
 
-    //output	= malloc(sizeof(str_t *) * hbp->);
+//    clist_init(outqueue, next, prev);
 
     clist_foreach(hbp, item, next)
     {
-
-//		des_header	= dwg_deserialize_message(item->, &body);
+    	output	= NULL;
 
 		switch(item->hdr.type)
 		{
@@ -538,7 +564,9 @@ void dwg_process_message(str_t *input, str_t* output)
 				LOG(L_DEBUG, "\t\tPORT6: %d\n", (int) body.s[7]);
 				LOG(L_DEBUG, "\t\tPORT7: %d\n", (int) body.s[8]);
 	*/
-				dwg_build_status_response(output);
+				output	= malloc(sizeof(dwg_outqueue_t));
+				dwg_build_status_response(&item->hdr, &output->content);
+
 				break;
 			case DWG_TYPE_SEND_SMS:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS\n", __FUNCTION__);
@@ -553,10 +581,10 @@ void dwg_process_message(str_t *input, str_t* output)
 				else
 				{
 					LOG(L_ERROR, "%s: Error sending sms\n", __FUNCTION__);
-					hexdump(output->s, output->len);
 				}
 
-				dwg_build_sms_ack(output);
+				output	= malloc(sizeof(dwg_outqueue_t));
+				dwg_build_sms_ack(&item->hdr, &output->content);
 
 				break;
 			case DWG_TYPE_SEND_SMS_RESULT:
@@ -567,13 +595,15 @@ void dwg_process_message(str_t *input, str_t* output)
 
 				DWG_CALL_IF_NOT_NULL(_callbacks->msg_response_callback, response);
 
-				dwg_build_sms_recv_ack(output);
+				output	= malloc(sizeof(dwg_outqueue_t));
+				dwg_build_sms_res_ack(&item->hdr, &output->content);
 
 				break;
-			case DWG_TYPE_SEND_SMS_RESULT_RESP:
+/*			case DWG_TYPE_SEND_SMS_RESULT_RESP:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS->_RESULT_RESP\n", __FUNCTION__);
-				dwg_build_sms_res_ack(output);
-				break;
+				dwg_build_sms_res_ack(&output->content);
+
+				break;*/
 			case DWG_TYPE_RECV_SMS:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_RECV_SMS\n", __FUNCTION__);
 
@@ -583,16 +613,31 @@ void dwg_process_message(str_t *input, str_t* output)
 
 				DWG_CALL_IF_NOT_NULL(_callbacks->msg_sms_recv_callback, received);
 
+				output	= malloc(sizeof(dwg_outqueue_t));
+				dwg_build_sms_recv_ack(&item->hdr, &output->content);
+
 				break;
+			case DWG_TYPE_RECV_AUTH:
+				LOG(L_DEBUG, "%s: received DWG_TYPE_RECV_AUTH\n", __FUNCTION__);
+
+				output	= malloc(sizeof(dwg_outqueue_t));
+				dwg_build_auth_response(&item->hdr, &output->content);
+
+				break;
+
 			default:
 				LOG(L_DEBUG, "%s: Received unknown code %d\n", __FUNCTION__, item->hdr.type);
 
 				hexdump(input->s, input->len);
 				break;
 		}
+
+		if (output != NULL)
+		{
+			printf("adding \n");
+			clist_append(outqueue, output, next, prev);
+		}
     }
 
 //	hexdump(output->s, output->len);
-
-	return output;
 }

@@ -11,7 +11,7 @@
 #include "dwg.h"
 
 #define READ_INTERVAL			3 // seconds
-#define KEEP_ALIVE_INTERVAL		10 // KEEP_ALIVE_INTERVAL * READ_INTERVAL
+#define KEEP_ALIVE_INTERVAL		30 // KEEP_ALIVE_INTERVAL * READ_INTERVAL
 #define SMSSRV_PORT				7008
 
 #define SMS_ENQUEUE(_queue_, _sms_) pthread_mutex_lock(&_queue_.lock); \
@@ -21,6 +21,7 @@
 void *dwg_server_gw_interactor(void *param);
 void dwg_server_write_to_queue(sms_t *sms, unsigned int port);
 void dwg_initilize_server();
+void dwg_kill_connection();
 #endif /* DWG_SERVER_H_ */
 /*
 000000: 35 39 35 39 38 31 31 34 36 36 32 33 00 00 00 00  595981146623....

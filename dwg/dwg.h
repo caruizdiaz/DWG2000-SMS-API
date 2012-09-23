@@ -41,6 +41,7 @@ typedef struct dwg_msg_des_header
 	int length;
 	short type;
 	short flag;
+	int serial;
 } dwg_msg_des_header_t;
 
 typedef struct dwg_sms_req
@@ -108,6 +109,8 @@ typedef struct dwg_ports_status
 #define DWG_TYPE_SEND_SMS_RESULT_RESP	4
 #define DWG_TYPE_RECV_SMS				5
 #define DWG_TYPE_RECV_SMS_RESULT		6
+#define DWG_TYPE_RECV_AUTH				0x0f
+#define DWG_TYPE_RECV_AUTH_RESP			0x10
 
 #define DWG_ENCODING_ASCII			0
 #define DWG_ENCODING_UNICODE		1
@@ -136,18 +139,27 @@ typedef struct dwg_message_callback
 
 } dwg_message_callback_t;
 
+typedef struct dwg_outqueue
+{
+	struct dwg_outqueue *next;
+	struct dwg_outqueue *prev;
+
+	str_t content;
+} dwg_outqueue_t;
+
 void dwg_build_keep_alive(str_t *output);
 void dwg_build_sms(sms_t *sms, int port, str_t *output);
 void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output);
-void dwg_build_sms_ack(str_t *output);
-void dwg_build_sms_res_ack(str_t *output);
+void dwg_build_sms_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
+void dwg_build_sms_res_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
 dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body);
-void dwg_build_status_response(str_t *output);
+void dwg_build_status_response(dwg_msg_des_header_t *original_hdr, str_t *output);
+void dwg_build_auth_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 void dwg_send_sms(str_t *destination, str_t *message, unsigned int port);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
-str_t *dwg_process_message(str_t *input);
+void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue);
 void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);
-void dwg_build_sms_recv_ack(str_t *output);
+void dwg_build_sms_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
 
 void print_something(const char *str);
 
