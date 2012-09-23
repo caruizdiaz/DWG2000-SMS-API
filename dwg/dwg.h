@@ -38,10 +38,12 @@ typedef struct dwg_msg_header
 
 typedef struct dwg_msg_des_header
 {
-	int length;
-	short type;
-	short flag;
-	int serial;
+	int32_t length;
+	char MAC[8];
+	int32_t timestamp;
+	int32_t serial;
+	int16_t type;
+	int16_t flag;
 } dwg_msg_des_header_t;
 
 typedef struct dwg_sms_req
@@ -109,6 +111,8 @@ typedef struct dwg_ports_status
 #define DWG_TYPE_SEND_SMS_RESULT_RESP	4
 #define DWG_TYPE_RECV_SMS				5
 #define DWG_TYPE_RECV_SMS_RESULT		6
+#define DWG_TYPE_RECV_RSSI				0x0d
+#define DWG_TYPE_RECV_RSSI_RESP			0x0e
 #define DWG_TYPE_RECV_AUTH				0x0f
 #define DWG_TYPE_RECV_AUTH_RESP			0x10
 
@@ -155,6 +159,7 @@ void dwg_build_sms_res_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
 dwg_msg_des_header_t dwg_deserialize_message(str_t *input, str_t *body);
 void dwg_build_status_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 void dwg_build_auth_response(dwg_msg_des_header_t *original_hdr, str_t *output);
+void dwg_build_rssi_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 void dwg_send_sms(str_t *destination, str_t *message, unsigned int port);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
 void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue);
