@@ -646,7 +646,7 @@ void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 					ports_status->status_array[index].status = (int) item->body.s[index + 1];
 				}
 
-				DWG_CALL_IF_NOT_NULL(_callbacks->status_callback, ports_status);
+				DWG_CALL_IF_NOT_NULL(_callbacks->status_callback, item->hdr.MAC, ports_status);
 
 	/*
 				LOG(L_DEBUG, "\tNumber of ports: %d\n", (int) body.s[0]);
@@ -688,7 +688,7 @@ void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 				dwg_sms_response_t	*response	= malloc(sizeof(dwg_sms_response_t));
 				dwg_deserialize_sms_response(input, response);
 
-				DWG_CALL_IF_NOT_NULL(_callbacks->msg_response_callback, response);
+				DWG_CALL_IF_NOT_NULL(_callbacks->msg_response_callback, item->hdr.MAC, response);
 
 				output	= malloc(sizeof(dwg_outqueue_t));
 				dwg_build_sms_res_ack(&item->hdr, &output->content);
@@ -706,7 +706,7 @@ void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 
 				dwg_deserialize_sms_received(&item->body, received);
 
-				DWG_CALL_IF_NOT_NULL(_callbacks->msg_sms_recv_callback, received);
+				DWG_CALL_IF_NOT_NULL(_callbacks->msg_sms_recv_callback, item->hdr.MAC, received);
 
 				output	= malloc(sizeof(dwg_outqueue_t));
 				dwg_build_sms_recv_ack(&item->hdr, &output->content);

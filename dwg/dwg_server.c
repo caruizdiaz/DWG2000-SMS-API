@@ -132,7 +132,7 @@ void *dwg_server_gw_interactor(void *param)
 			from_gw.s	= buffer;
 			from_gw.len	= bytes_read;
 
-			hexdump(from_gw.s, from_gw.len);
+//			hexdump(from_gw.s, from_gw.len);
 
 			dwg_process_message(&from_gw, &outqueue);
 		}
@@ -172,7 +172,7 @@ void *dwg_server_gw_interactor(void *param)
 //		printf("writing to gw\n");
 		clist_foreach((&outqueue), oq_item, next)
 		{
-			hexdump(oq_item->content.s, oq_item->content.len);
+//			hexdump(oq_item->content.s, oq_item->content.len);
 
 			write_to_gw(client_fd, &oq_item->content);
 

@@ -128,12 +128,13 @@ typedef struct dwg_ports_status
 #define GET_MSG_OFFSET(_field_, _offset_, _input_) memcpy(_field_, &_input_[offset], sizeof(_field_)); \
 													_offset_ += sizeof(_field_);
 
-#define DWG_CALL_IF_NOT_NULL(_func_, _param_) if (_func_!= NULL) \
-												_func_(_param_);
+#define DWG_CALL_IF_NOT_NULL(_func_, _gwid_, _param_) if (_func_!= NULL) \
+												_func_(_gwid_, _param_);
 
-typedef void (*status_callback_fptr) (dwg_ports_status_t *status);
-typedef void (*msg_response_callback_fptr) (dwg_sms_response_t *res);
-typedef void (*msg_sms_recv_callback_fptr) (dwg_sms_received_t *recv);
+typedef void (*status_callback_fptr) (char *gw_id, dwg_ports_status_t *status);
+typedef void (*msg_response_callback_fptr) (char *gw_id, dwg_sms_response_t *res);
+typedef void (*msg_sms_recv_callback_fptr) (char *gw_id, dwg_sms_received_t *recv);
+typedef void (*msg_new_cnn_fptr) (char *gw_id, str_t *ip);
 
 typedef struct dwg_message_callback
 {

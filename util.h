@@ -28,19 +28,27 @@ typedef struct str
 #define L_WARNING		1
 #define L_ERROR			2
 
-#define LOG(LEVEL, format, ...) 			\
-		if (LEVEL == L_DEBUG) { 			\
-			printf("[DEBUG] ");  			\
-			printf(format, __VA_ARGS__); 	\
-		} 									\
-		else if (LEVEL == L_WARNING) { 		\
-			printf("[WARNING] ");  			\
-			printf(format, __VA_ARGS__); 	\
-		} 									\
-		else if (LEVEL == L_ERROR) { 		\
-			printf("[ERROR] ");  			\
-			printf(format, __VA_ARGS__); 	\
+#ifdef WITH_DEBUG
+#	define LOG(LEVEL, format, ...) 				\
+			if (LEVEL == L_DEBUG) { 			\
+				fprintf(stderr, "[DEBUG] ");	\
+				fprintf(stderr, format, __VA_ARGS__); 	\
+			} 									\
+			else if (LEVEL == L_WARNING) { 		\
+				fprintf(stderr, "[WARNING] ");  			\
+				fprintf(stderr, format, __VA_ARGS__); 	\
+			} 									\
+			else if (LEVEL == L_ERROR) { 		\
+				fprintf(stderr, "[ERROR] ");  			\
+				fprintf(stderr, format, __VA_ARGS__); 	\
+			}
+#else
+#	define LOG(LEVEL, format, ...) 				\
+		if (LEVEL == L_ERROR) { 				\
+			fprintf(stderr, "[DEBUG] ");  				\
+			fprintf(stderr, format, __VA_ARGS__); 		\
 		}
+#endif
 
 #define STR_ALLOC(_str_, _size_) _str_.s       = (char *) calloc(_size_, sizeof(char)); \
                                                                   _str_.len = _size_;
