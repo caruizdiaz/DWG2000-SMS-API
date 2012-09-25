@@ -6,6 +6,8 @@
  *
  */
 
+//#define WITH_DEBUG
+
 #include <time.h>
 #include "dwg.h"
 #include "clist.h"
@@ -33,93 +35,8 @@ static void get_messages(str_t *input, dwg_hbp_t *hbp);
 static void unicode2ascii(str_t *unicode, str_t* ascii);
 
 static dwg_message_callback_t *_callbacks	= NULL;
-
-typedef void (*func) (int a, str_t *b);
-typedef void (*func2) (int a, dwg_ports_status_t *b);
-typedef void (*func3) (dwg_ports_status_t *b);
-
-void make_cb4(func3 f3)
-{
-	printf("----->\n");
-
-	dwg_ports_status_t	*sts = malloc(sizeof(dwg_ports_status_t));
-	sts->size = 3;
-	//printf("yep\n");
-
-	sts->status_array		= (dwg_port_status_t *) malloc(sizeof(dwg_port_status_t) * sts->size);
-	sts->status_array->port = 123;
-	sts->status_array->status = 999;
-
-	sts->status_array[1].port = 111;
-	sts->status_array[1].status = 3333;
-
-	sts->status_array[2].port = 222;
-	sts->status_array[2].status = 3333;
-
-	sts->status_array[3].port = 333;
-	sts->status_array[3].status = 3333;
-
-	printf("yup\n");
-	f3(sts);
-	printf("yong!!\n");
-}
-
-void make_cb3(dwg_ports_status_t *s)
-{
-	s->size	= 3;
-	printf("A!\n");
-
-	s->status_array		= (dwg_port_status_t *) malloc(sizeof(dwg_port_status_t *) * s->size);
-	s->status_array->port = 123;
-	s->status_array->status = 999;
-
-	s->status_array[1].port = 111;
-	s->status_array[1].status = 3333;
-/*
-	s->status_array[2].port = 222;
-	s->status_array[2].status = 444; */
-
-	printf("done A!\n");
-}
-
-void make_cb2(func2 ptr)
-{
-	dwg_ports_status_t *s = malloc(sizeof (dwg_ports_status_t));
-	s->size	= 3;
-	printf("A\n");
-
-	s->status_array		= (dwg_port_status_t *) malloc(sizeof(dwg_port_status_t *) * s->size);
-	s->status_array->port = 123;
-	s->status_array->status = 999;
-
-	s->status_array[1].port = 111;
-	s->status_array[1].status = 3333;
-
-	s->status_array[2].port = 222;
-	s->status_array[2].status = 444;
-
-	printf("done A\n");
-
-	ptr(444, s);
-}
-void make_cb(func ptr)
-{
-	str_t *s =  malloc(sizeof(str_t));
-	//str_t s;
-
-	STR_ALLOC((*s), 10);
-	memcpy(s->s, "hol!\0", 5);
-	s->len = 4;
-
-	ptr(123, s);
-}
-
-void print_something(const char *str)
-{
-	printf("-> %s\n", str);
-}
-
 listener_data_t *listener_data;
+_bool _is_api_2_0							= FALSE;
 
 void dwg_start_server(int port, dwg_message_callback_t *callbacks)
 {
@@ -185,29 +102,31 @@ void dwg_build_sms(sms_t *sms, int port, str_t *output)
 
 void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
 {
-	str_t body;
 	int offset	= 0;
-	//dwg_msg_des_header_t des_header = dwg_deserialize_message(input, &body);
-	dwg_deserialize_message(input, &body);
 
-	response->count_of_number	= (int) body.s[offset];
+	response->count_of_number	= (int) input->s[offset];
 	offset++;
 
 	bzero(response->number, sizeof(response->number));
-	memcpy(response->number, &body.s[1], sizeof(response->number));
+	memcpy(response->number, &input->s[1], sizeof(response->number));
 	offset += sizeof(response->number);
 
-	response->port		= (int) body.s[offset];
+	response->port		= (int) input->s[offset];
 	offset++;
 
-	response->result	= (dwg_sms_result_code_t) body.s[offset];
+	response->result	= (dwg_sms_result_code_t) input->s[offset];
 	offset++;
 
-	response->count_of_slice	= (int) body.s[offset];
+	response->count_of_slice	= (int) input->s[offset];
 	offset++;
 
-	response->succeded_slices	= (int) body.s[offset];
+	response->succeded_slices	= (int) input->s[offset];
 	offset++;
+
+/*	printf("result: %d. port; %d '%s'\n", response->result, response->port, response->number);
+	int i = 0;
+	for (i = 0; i < 24; i++)
+		printf("%c", response->number[i]); */
 }
 
 void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received)
@@ -263,6 +182,7 @@ static void unicode2ascii(str_t *unicode, str_t* ascii)
 	short uni_array[unicode->len / 2];
 	int i;
 
+	printf("before [%.*s]\n", unicode->len, unicode->s);
 	memcpy(&uni_array, unicode->s, unicode->len);
 	STR_ALLOC((*ascii), unicode->len / 2);
 
@@ -272,7 +192,7 @@ static void unicode2ascii(str_t *unicode, str_t* ascii)
 //		printf("%d-%c", swap_bytes_16(uni_array[i]), swap_bytes_16(uni_array[i]));
 	}
 
-	printf("[%.*s]\n", ascii->len, ascii->s);
+	printf("after [%.*s]\n", ascii->len, ascii->s);
 }
 
 static void get_messages(str_t *input, dwg_hbp_t *hbp)
@@ -288,7 +208,7 @@ static void get_messages(str_t *input, dwg_hbp_t *hbp)
 		current_offset->s	= input->s + total_bytes;
 		current_offset->len	= input->len - total_bytes;
 
-		//printf("len now: %d\n", current_offset->len);
+//		printf("len now: %d\n", current_offset->len);
 //		printf("============\n");
 		//hexdump(current_offset->s, current_offset->len);
 
@@ -686,7 +606,7 @@ void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESULT\n", __FUNCTION__);
 
 				dwg_sms_response_t	*response	= malloc(sizeof(dwg_sms_response_t));
-				dwg_deserialize_sms_response(input, response);
+				dwg_deserialize_sms_response(&item->body, response);
 
 				DWG_CALL_IF_NOT_NULL(_callbacks->msg_response_callback, item->hdr.MAC, response);
 
@@ -718,6 +638,8 @@ void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 				output	= malloc(sizeof(dwg_outqueue_t));
 				dwg_build_auth_response(&item->hdr, &output->content);
 
+				_is_api_2_0	= TRUE;
+
 				break;
 			case DWG_TYPE_RECV_RSSI:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_RECV_RSSI\n", __FUNCTION__);
@@ -730,7 +652,7 @@ void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue)
 			default:
 				LOG(L_DEBUG, "%s: Received unknown code %d\n", __FUNCTION__, item->hdr.type);
 
-				hexdump(input->s, input->len);
+				hexdump(item->body.s, item->body.len);
 				break;
 		}
 
