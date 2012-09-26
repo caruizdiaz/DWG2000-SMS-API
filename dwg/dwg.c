@@ -33,7 +33,8 @@ static int swap_bytes_32(int input);
 static short swap_bytes_16(short input);
 static void get_messages(str_t *input, dwg_hbp_t *hbp);
 static void unicode2ascii(str_t *unicode, str_t* ascii);
-
+static void ascii2unicode(str_t *ascii, str_t* unicode)
+;
 static dwg_message_callback_t *_callbacks	= NULL;
 listener_data_t *listener_data;
 _bool _is_api_2_0							= FALSE;
@@ -72,22 +73,38 @@ void dwg_build_sms(sms_t *sms, int port, str_t *output)
 {
 	dwg_sms_request_t request;
 	str_t body, header;
+	short length_16;
 
 	STR_ALLOC(body, (sizeof(dwg_sms_request_t) - sizeof(str_t)) + sms->content.len);
 
 	request.port			= port;
-	request.encoding		= DWG_ENCODING_ASCII;
+	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
 	request.type			= DWG_MSG_TYPE_SMS;
 	request.count_of_number	= 1;
 
 	bzero(request.number, sizeof(request.number));
-	strcpy(request.number, sms->destination.s);
+	memcpy(request.number, sms->destination.s, sms->destination.len);
+//	strcpy(request.number, sms->destination.s);
 
-	short length_16	= swap_bytes_16((short) sms->content.len);
-	memcpy(request.content_length, &length_16, sizeof(request.content_length));
+	if (request.encoding == DWG_ENCODING_ASCII)
+	{
+		length_16	= swap_bytes_16((short) sms->content.len);
+		memcpy(request.content_length, &length_16, sizeof(request.content_length));
 
-	STR_ALLOC(request.content, sms->content.len);
-	memcpy(request.content.s, sms->content.s, sms->content.len);
+		STR_ALLOC(request.content, sms->content.len);
+		memcpy(request.content.s, sms->content.s, sms->content.len);
+	}
+	else
+	{
+		str_t unicode;
+
+		ascii2unicode(&sms->content, &unicode);
+		length_16	= swap_bytes_16((short) unicode.len);
+		memcpy(request.content_length, &length_16, sizeof(request.content_length));
+
+		STR_ALLOC(request.content, unicode.len);
+		memcpy(request.content.s, unicode.s, unicode.len);
+	}
 
 	dwg_serialize_sms_req(&request, &body);
 	dwg_build_msg_header(body.len, DWG_MSG_TYPE_SMS, &header);
@@ -97,7 +114,7 @@ void dwg_build_sms(sms_t *sms, int port, str_t *output)
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], body.s, body.len);
 
-//	hexdump(output->s, output->len);
+	hexdump(output->s, output->len);
 }
 
 void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
@@ -169,6 +186,9 @@ void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received)
 
 	received->message	= sms_content;
 
+	if (_is_api_2_0 && received->encoding == DWG_ENCODING_ASCII)
+		LOG(L_ERROR, "%s: encoding gsm7bit not supported\n", __FUNCTION__);
+
 	if (received->encoding == DWG_ENCODING_ASCII)
 		return;
 
@@ -182,17 +202,41 @@ static void unicode2ascii(str_t *unicode, str_t* ascii)
 	short uni_array[unicode->len / 2];
 	int i;
 
-	printf("before [%.*s]\n", unicode->len, unicode->s);
+//	hexdump(unicode->s, unicode->len);
+
+	printf("before conversion [%.*s]\n", unicode->len, unicode->s);
 	memcpy(&uni_array, unicode->s, unicode->len);
-	STR_ALLOC((*ascii), unicode->len / 2);
+	STR_ALLOC((*ascii), (unicode->len / 2));
 
 	for(i = 0; i < (unicode->len / 2); i++)
 	{
 		ascii->s[i]	= swap_bytes_16(uni_array[i]);
-//		printf("%d-%c", swap_bytes_16(uni_array[i]), swap_bytes_16(uni_array[i]));
+//		printf("%c|%c ", uni_array[i], swap_bytes_16(uni_array[i]));
 	}
 
-	printf("after [%.*s]\n", ascii->len, ascii->s);
+//	ascii->s[ascii->len] = '\0';
+	printf("after conversion [%.*s]\n", ascii->len, ascii->s);
+}
+
+static void ascii2unicode(str_t *ascii, str_t* unicode)
+{
+	short uni_array[ascii->len * 2];
+	int i;
+
+//	hexdump(unicode->s, unicode->len);
+
+//	printf("before [%.*s]\n", unicode->len, unicode->s);
+//	memcpy(&uni_array, unicode->s, unicode->len);
+	STR_ALLOC((*unicode), ascii->len * 2);
+
+	for(i = 0; i < ascii->len; i++)
+	{
+		unicode->s[i * 2]		= 0;
+		unicode->s[i * 2 + 1]	= ascii->s[i];
+		//printf("%c|%c", uni_array[i], swap_bytes_16(uni_array[i]));
+	}
+
+	//printf("after [%.*s]\n", ascii->len, ascii->s);
 }
 
 static void get_messages(str_t *input, dwg_hbp_t *hbp)
