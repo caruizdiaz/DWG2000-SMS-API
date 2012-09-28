@@ -28,6 +28,12 @@ typedef struct listener_data
 
 } listener_data_t;
 
+typedef struct connection_info
+{
+	int client_fd;
+	str_t ip;
+} connection_info_t;
+
 typedef enum sock_direction { DIR_DUAL, DIR_SINGLE } sock_direction_t;
 
 typedef void * (*dflt_func_ptr_t) (void *);

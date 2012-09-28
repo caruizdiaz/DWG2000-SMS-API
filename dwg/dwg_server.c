@@ -18,13 +18,6 @@
 #include "../util.h"
 #include "../networking/ip_socket.h"
 
-/*typedef struct sms_wait_queue
-{
-	int socket_fd;
-	sms_t *sms;
-	pthread_mutex_t lock;
-} sms_wait_queue_t; */
-
 typedef struct sms_outqueue
 {
 	struct sms_outqueue *next;
@@ -50,16 +43,13 @@ void dwg_kill_connection()
 
 void dwg_initilize_server()
 {
-//	printf("init\n");
 	_sms_queue	= malloc(sizeof(sms_outqueue_t));
 	clist_init(_sms_queue, next, prev);
-//	printf("init done\n");
 }
 
 void dwg_server_write_to_queue(sms_t *sms, unsigned int port)
 {
 	pthread_mutex_lock(&_mutex);
-//	printf("insert\n");
 	if (_sms_queue == NULL)
 	{
 		LOG(L_ERROR, "%s: SMS queue not initialized\n", __FUNCTION__);
@@ -72,23 +62,22 @@ void dwg_server_write_to_queue(sms_t *sms, unsigned int port)
 	item->sms		= sms;
 
 	clist_append(_sms_queue, item, next, prev);
-//	printf("insert done\n");
 	pthread_mutex_unlock(&_mutex);
 }
 
 void *dwg_server_gw_interactor(void *param)
 {
 	char buffer[BUFFER_SIZE];
-	int client_fd				= *((int *)param),
-		bytes_read 				= 0,
+	connection_info_t *cnn_info	= ((connection_info_t *)param);
+	int	bytes_read 				= 0,
 		time_elapsed			= 0;
 	sms_outqueue_t	*sms_item	= NULL;
 	_bool keep_alive			= FALSE;
 	dwg_outqueue_t outqueue, *oq_item;
 
-	_socket_fd	= client_fd;
+	_socket_fd	= cnn_info->client_fd;
 
-	fcntl(client_fd, F_SETFL, O_NONBLOCK);	// set the socket to non-blocking mode
+	fcntl(cnn_info->client_fd, F_SETFL, O_NONBLOCK);	// set the socket to non-blocking mode
 
 	clist_init((&outqueue), next, prev);
 
@@ -98,10 +87,14 @@ void *dwg_server_gw_interactor(void *param)
 
 		bzero(buffer, sizeof(buffer));
 
-		bytes_read	= read(client_fd, buffer, sizeof(buffer));
+		bytes_read	= read(cnn_info->client_fd, buffer, sizeof(buffer));
 
 		if (_stop_now)
+		{
+			free(cnn_info->ip.s);
+			free(cnn_info);
 			break;
+		}
 
 		if (bytes_read > BUFFER_SIZE)
 		{
@@ -134,7 +127,7 @@ void *dwg_server_gw_interactor(void *param)
 
 //			hexdump(from_gw.s, from_gw.len);
 
-			dwg_process_message(&from_gw, &outqueue);
+			dwg_process_message(&cnn_info->ip, &from_gw, &outqueue);
 		}
 
 		pthread_mutex_lock(&_mutex);
@@ -169,36 +162,16 @@ void *dwg_server_gw_interactor(void *param)
 			clist_append((&outqueue), oq_ka, next, prev);
 		}
 
-//		printf("writing to gw\n");
 		clist_foreach((&outqueue), oq_item, next)
 		{
 //			hexdump(oq_item->content.s, oq_item->content.len);
 
-			write_to_gw(client_fd, &oq_item->content);
+			write_to_gw(cnn_info->client_fd, &oq_item->content);
 
 			clist_rm(oq_item, next, prev);
 
 //			sleep(1);
 		}
-//		printf("writing done\n");
-
-/*
-		if (to_gw.len == 0 && time_elapsed >= KEEP_ALIVE_INTERVAL * READ_INTERVAL)
-		{
-			LOG(L_DEBUG, "%s: sending keep alive request\n", __FUNCTION__);
-
-			dwg_build_keep_alive(&to_gw);
-			time_elapsed	= 0;
-		}
-*/
-//		hexdump(to_gw.s, to_gw.len);
-
-/*		if (to_gw.len > 0 && (written = write(client_fd, to_gw.s, to_gw.len)) != to_gw.len)
-		{
-			LOG(L_ERROR, "%s: write(): wrote %d/%d bytes only\n", __FUNCTION__, written, to_gw.len);
-			//close(client_fd);
-			return NULL;
-		} */
 	}
 
 	return NULL;

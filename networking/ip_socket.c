@@ -84,6 +84,7 @@ static void *string_listener(void *param)
 	_uint sin_size					= 0;
 	int client_fd, sock_fd, offset 	= 0;
 	dflt_func_ptr_t callback;
+	connection_info_t *cnn_info		= NULL;
 
 	memcpy(&sock_fd, params, sizeof(int));
 	offset	+= sizeof(int);
@@ -97,21 +98,27 @@ static void *string_listener(void *param)
 	for(;;)
 	{
 		pthread_t thread;
+		cnn_info	= malloc(sizeof(connection_info_t));
+		sin_size 	= sizeof(struct sockaddr_in);
+		char *ip	= NULL;
 
-		sin_size = sizeof(struct sockaddr_in);
-
-		if ((client_fd = accept(sock_fd, (struct sockaddr *) &client, &sin_size)) == -1)
+		if ((cnn_info->client_fd = accept(sock_fd, (struct sockaddr *) &client, &sin_size)) == -1)
 		{
 			LOG(L_ERROR, "%s | accept(): %s\n", __FUNCTION__, strerror(errno));
 		    continue;
 		}
 
-		LOG(L_DEBUG, "Connection from %s\n", inet_ntoa(client.sin_addr));
+		ip				= inet_ntoa(client.sin_addr);
+		cnn_info->ip.s	= malloc(strlen(ip));
+		cnn_info->ip.len= strlen(ip);
+		memcpy(cnn_info->ip.s, ip, cnn_info->ip.len);
 
-		int *sock_df_param	= malloc(sizeof(int));
-		*sock_df_param		= client_fd;
+		LOG(L_DEBUG, "Connection from [%.*s]\n", cnn_info->ip.len, cnn_info->ip.s);
 
-		if (pthread_create(&thread, NULL, callback, (void *) sock_df_param) != 0)
+/*		int *sock_df_param	= malloc(sizeof(int));
+		*sock_df_param		= client_fd; */
+
+		if (pthread_create(&thread, NULL, callback, (void *) cnn_info) != 0)
 		{
 			LOG(L_DEBUG, "%s: Error creating thread for connection\n",__FUNCTION__);
 			close(client_fd);

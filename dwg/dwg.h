@@ -131,10 +131,9 @@ typedef struct dwg_ports_status
 #define DWG_CALL_IF_NOT_NULL(_func_, _gwid_, _param_) if (_func_!= NULL) \
 												_func_(_gwid_, _param_);
 
-typedef void (*status_callback_fptr) (char *gw_id, dwg_ports_status_t *status);
-typedef void (*msg_response_callback_fptr) (char *gw_id, dwg_sms_response_t *res);
-typedef void (*msg_sms_recv_callback_fptr) (char *gw_id, dwg_sms_received_t *recv);
-typedef void (*msg_new_cnn_fptr) (char *gw_id, str_t *ip);
+typedef void (*status_callback_fptr) (str_t *gw_ip, dwg_ports_status_t *status);
+typedef void (*msg_response_callback_fptr) (str_t *gw_ip, dwg_sms_response_t *res);
+typedef void (*msg_sms_recv_callback_fptr) (str_t *gw_ip, dwg_sms_received_t *recv);
 
 typedef struct dwg_message_callback
 {
@@ -163,7 +162,7 @@ void dwg_build_auth_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 void dwg_build_rssi_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 void dwg_send_sms(str_t *destination, str_t *message, unsigned int port);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
-void dwg_process_message(str_t *input, dwg_outqueue_t *outqueue);
+void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue);
 void dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);
 void dwg_build_sms_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
 
