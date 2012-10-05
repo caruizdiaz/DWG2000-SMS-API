@@ -109,9 +109,11 @@ static void *string_listener(void *param)
 		}
 
 		ip				= inet_ntoa(client.sin_addr);
-		cnn_info->ip.s	= malloc(strlen(ip));
+		cnn_info->ip.s	= malloc(strlen(ip) + 1);
 		cnn_info->ip.len= strlen(ip);
+
 		memcpy(cnn_info->ip.s, ip, cnn_info->ip.len);
+		cnn_info->ip.s[cnn_info->ip.len] = '\0';
 
 		LOG(L_DEBUG, "Connection from [%.*s]\n", cnn_info->ip.len, cnn_info->ip.s);
 

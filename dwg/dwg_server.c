@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 
-#define BUFFER_SIZE 	5000
+#define BUFFER_SIZE 	50000
 
 #include "dwg_server.h"
 #include "clist.h"
@@ -138,15 +138,19 @@ void *dwg_server_gw_interactor(void *param)
 			/*
 			 * Add built sms to the main outqueue
 			 */
-			dwg_build_sms(sms_item->sms, sms_item->gw_port, &oq_sms->content);
+			if (!dwg_build_sms(sms_item->sms, sms_item->gw_port, &oq_sms->content))
+			{
+				LOG(L_ERROR, "%s: Error building SMS\n", __FUNCTION__);
+
+				free(oq_sms);
+				clist_rm(sms_item, next, prev);
+
+				continue;
+			}
 
 			LOG(L_DEBUG, "%s: Sending sms to [%.*s], using port %d\n", __FUNCTION__, 	sms_item->sms->destination.len,
 																						sms_item->sms->destination.s,
 																						sms_item->gw_port);
-
-			//free(item->sms->content.s);
-			//free(item->sms->destination.s);
-			//free(item);
 
 			clist_rm(sms_item, next, prev);
 
@@ -165,11 +169,15 @@ void *dwg_server_gw_interactor(void *param)
 		clist_foreach((&outqueue), oq_item, next)
 		{
 //			hexdump(oq_item->content.s, oq_item->content.len);
-
 			write_to_gw(cnn_info->client_fd, &oq_item->content);
+
 
 			clist_rm(oq_item, next, prev);
 
+			if (oq_item->content.s != NULL)
+				free(oq_item->content.s);
+
+//			free(oq_item);
 //			sleep(1);
 		}
 	}
