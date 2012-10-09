@@ -6,7 +6,7 @@
  *
  */
 
-#define WITH_DEBUG
+//#define WITH_DEBUG
 
 #include <time.h>
 #include "dwg.h"
@@ -72,7 +72,12 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 	str_t body, header;
 	short length_16;
 
-	STR_ALLOC(body, (sizeof(dwg_sms_request_t) - sizeof(str_t)) + sms->content.len);
+	/*STR_ALLOC(body, (sizeof(dwg_sms_request_t) - sizeof(str_t)) + sms->content.len);
+	if (!body.s)
+	{
+		LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, body.len);
+		return FALSE;
+	}*/
 
 	request.port			= port;
 	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
@@ -88,9 +93,9 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 		memcpy(request.content_length, &length_16, sizeof(request.content_length));
 
 		STR_ALLOC(request.content, sms->content.len);
-		if (!output->s)
+		if (!request.content.s)
 		{
-			LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, sms->content.len);
+			LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, sms->content.len);
 			return FALSE;
 		}
 
@@ -105,28 +110,32 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 		memcpy(request.content_length, &length_16, sizeof(request.content_length));
 
 		STR_ALLOC(request.content, unicode.len);
-		if (!output->s)
+		if (!request.content.s)
 		{
-			LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, unicode.len);
+			LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, unicode.len);
 			return FALSE;
 		}
 
 		memcpy(request.content.s, unicode.s, unicode.len);
+
+		STR_FREE_NON_0(unicode);
 	}
 
 	dwg_serialize_sms_req(&request, &body);
 	dwg_build_msg_header(body.len, DWG_MSG_TYPE_SMS, &header);
 
-	STR_ALLOC((*output), header.len + body.len);
+	STR_ALLOC((*output), (header.len + body.len));
 	if (!output->s)
 	{
-		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, header.len + body.len);
+		LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, header.len + body.len);
 		return FALSE;
 	}
 
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], body.s, body.len);
 
+	STR_FREE_NON_0(body);
+	STR_FREE_NON_0(request.content);
 //	hexdump(output->s, output->len);
 
 	return TRUE;
@@ -166,10 +175,6 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 	int offset	= 0;
 	str_t sms_content;
 
-	printf("inside\n");
-
-//	hexdump(msg_body->s, msg_body->len);
-
 	bzero(received->number, sizeof(received->number));
 	memcpy(received->number, msg_body->s, sizeof(received->number));
 	offset += sizeof(received->number);
@@ -179,7 +184,7 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 
 	received->port	= (int) msg_body->s[offset];
 	offset++;
-//	printf("B\n");
+
 	bzero(received->timestamp, sizeof(received->timestamp));
 	memcpy(received->timestamp, &msg_body->s[offset], sizeof(received->timestamp) - 1 /* exclude the null terminator extra space*/);
 	offset += sizeof(received->timestamp) - 1;
@@ -190,7 +195,6 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 	received->encoding	= (int) msg_body->s[offset];
 	offset++;
 
-	printf("C\n");
 	short aux	= 0;
 	memcpy(&aux, &msg_body->s[offset], 2);
 	aux	= swap_bytes_16(aux);
@@ -211,23 +215,25 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 	}
 
 	sms_content.len--;
-	printf("D\n");
+
 	memcpy(sms_content.s, &msg_body->s[offset], aux);
 	sms_content.s[aux] = '\0';
 
 	received->message	= sms_content;
-	printf("E\n");
 
 	if (_is_api_2_0 && (received->encoding == DWG_ENCODING_ASCII))
 	{
 		LOG(L_ERROR, "%s: encoding gsm7bit not supported\n", __FUNCTION__);
+//		STR_FREE(sms_content);
 		return FALSE;
 	}
 
 	if (received->encoding == DWG_ENCODING_ASCII)
+	{
+//		STR_FREE(sms_content);
 		return TRUE;
+	}
 
-	printf("F\n");
 	unicode2ascii(&sms_content, &received->message);
 
 	STR_FREE(sms_content);
@@ -244,6 +250,11 @@ static void unicode2ascii(str_t *unicode, str_t* ascii)
 //	printf("before conversion [%.*s]\n", unicode->len, unicode->s);
 	memcpy(&uni_array, unicode->s, unicode->len);
 	STR_ALLOC((*ascii), (unicode->len / 2));
+	if (!ascii->s)
+	{
+		LOG(L_ERROR, "%s: no more memory trying to allocate %d bytes\n", __FUNCTION__,  (unicode->len / 2));
+		return;
+	}
 
 	for(i = 0; i < (unicode->len / 2); i++)
 		ascii->s[i]	= swap_bytes_16(uni_array[i]);
@@ -260,6 +271,11 @@ static void ascii2unicode(str_t *ascii, str_t* unicode)
 //	printf("before [%.*s]\n", unicode->len, unicode->s);
 //	memcpy(&uni_array, unicode->s, unicode->len);
 	STR_ALLOC((*unicode), ascii->len * 2);
+	if (!unicode->s)
+	{
+		LOG(L_ERROR, "%s: no more memory trying to allocate %d bytes\n", __FUNCTION__,  ascii->len * 2);
+		return;
+	}
 
 	for(i = 0; i < ascii->len; i++)
 	{
@@ -267,7 +283,6 @@ static void ascii2unicode(str_t *ascii, str_t* unicode)
 		unicode->s[i * 2 + 1]	= ascii->s[i];
 		//printf("%c|%c", uni_array[i], swap_bytes_16(uni_array[i]));
 	}
-
 	//printf("after [%.*s]\n", ascii->len, ascii->s);
 }
 
@@ -312,6 +327,8 @@ static _bool get_messages(str_t *input, dwg_hbp_t *hbp)
 //		printf("bytes %d/%d\n", total_bytes, input->len);
 	}
 	while (total_bytes < input->len);
+
+	free(current_offset);
 
 	return TRUE;
 }
@@ -382,6 +399,7 @@ _bool dwg_build_rssi_response(dwg_msg_des_header_t *original_hdr, str_t *output)
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], &response, sizeof(char));
 
+	STR_FREE_NON_0(header);
 	return TRUE;
 }
 
@@ -406,6 +424,7 @@ _bool dwg_build_auth_response(dwg_msg_des_header_t *original_hdr, str_t *output)
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], &response, sizeof(char));
 
+	STR_FREE_NON_0(header);
 	return TRUE;
 }
 
@@ -430,11 +449,9 @@ _bool dwg_build_status_response(dwg_msg_des_header_t *original_hdr, str_t *outpu
 //	hexdump(header.s, header.len);
 
 	memcpy(output->s, header.s, header.len);
-//	hexdump(output->s, output->len);
-
 	memcpy(&output->s[header.len], &response, sizeof(char));
-//	hexdump(output->s, output->len);
 
+	STR_FREE_NON_0(header);
 	return TRUE;
 }
 
@@ -453,11 +470,12 @@ _bool dwg_build_sms_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, header.len + 1);
 		return FALSE;
 	}
-	output->len	= header.len + 1;
+	output->len				= header.len + 1;
 
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], &response, sizeof(char));
 
+	STR_FREE_NON_0(header);
 	return TRUE;
 }
 
@@ -481,6 +499,7 @@ _bool dwg_build_sms_res_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], &response, sizeof(char));
 
+	STR_FREE_NON_0(header);
 	return TRUE;
 }
 
@@ -504,6 +523,8 @@ _bool dwg_build_sms_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 	memcpy(output->s, header.s, header.len);
 	memcpy(&output->s[header.len], &response, sizeof(char));
 
+	STR_FREE_NON_0(header);
+
 	return TRUE;
 }
 
@@ -517,7 +538,8 @@ _bool dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output)
 	int offset	= 0,
 		size	= sizeof(dwg_sms_request_t) - sizeof(str_t) /* str_t content */ + msg->content.len;
 
-	output->s	= malloc(size);
+	STR_ALLOC((*output), size);
+	//output->s	= malloc(size);
 	if (!output->s)
 	{
 		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, size);
@@ -547,7 +569,10 @@ _bool dwg_build_msg_header(int length, short type, str_t *output)
 	hdr.type		= type;
 	hdr.timestamp	= time(NULL);
 	hdr.flag		= 0;
-
+/*
+ * The following, can actually contain any value, it does not matter as long as all fields combined together identify uniquely
+ * the message.
+ */
 	hdr.MAC[0]	= 0x0;
 	hdr.MAC[1]	= 0x1f;
 	hdr.MAC[2]	= 0xd6;
@@ -678,7 +703,7 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 {
 	dwg_outqueue_t *output	= NULL;
     dwg_hbp_t	*hbp		= malloc(sizeof(dwg_hbp_t));
-    dwg_hbp_t	*item		= NULL;
+    dwg_hbp_t	*item, *aux = NULL;
 
     LOG(L_DEBUG, "%s: received %d bytes\n", __FUNCTION__, input->len);
 
@@ -690,7 +715,7 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 
 //    clist_init(outqueue, next, prev);
 
-    clist_foreach(hbp, item, next)
+    clist_foreach_safe(hbp, item, aux, next)
     {
     	output	= NULL;
 
@@ -787,6 +812,7 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 				if (!dwg_deserialize_sms_received(&item->body, received))
 				{
 					LOG(L_ERROR, "%s: error deserializing received message\n", __FUNCTION__);
+					hexdump(item->body.s, item->body.len);
 					break;
 				}
 
@@ -841,7 +867,7 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 			clist_append(outqueue, output, next, prev);
 		}
 
-		//clist_rm(item, next, prev);
+		clist_rm(item, next, prev);
 //		printf("B\n");
 
 //		printf("C %p %d\n", item->body.s, item->body.len);
@@ -850,9 +876,9 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 			free(item->body.s);
 
 		//printf("D\n");
-		//free(item);
+		free(item);
 
-		printf("end of iteration\n");
+//		printf("end of iteration\n");
     }
 
     //free()

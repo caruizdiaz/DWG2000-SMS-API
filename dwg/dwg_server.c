@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 
-#define BUFFER_SIZE 	50000
+#define BUFFER_SIZE 	20000
 
 #include "dwg_server.h"
 #include "clist.h"
@@ -68,12 +68,12 @@ void dwg_server_write_to_queue(sms_t *sms, unsigned int port)
 void *dwg_server_gw_interactor(void *param)
 {
 	char buffer[BUFFER_SIZE];
-	connection_info_t *cnn_info	= ((connection_info_t *)param);
-	int	bytes_read 				= 0,
-		time_elapsed			= 0;
-	sms_outqueue_t	*sms_item	= NULL;
-	_bool keep_alive			= FALSE;
-	dwg_outqueue_t outqueue, *oq_item;
+	connection_info_t *cnn_info			= ((connection_info_t *)param);
+	int	bytes_read 						= 0,
+		time_elapsed					= 0;
+	sms_outqueue_t	*sms_item, *aux2;
+	_bool keep_alive					= FALSE;
+	dwg_outqueue_t outqueue, *oq_item, *aux;
 
 	_socket_fd	= cnn_info->client_fd;
 
@@ -93,6 +93,7 @@ void *dwg_server_gw_interactor(void *param)
 		{
 			free(cnn_info->ip.s);
 			free(cnn_info);
+
 			break;
 		}
 
@@ -131,7 +132,7 @@ void *dwg_server_gw_interactor(void *param)
 		}
 
 		pthread_mutex_lock(&_mutex);
-		clist_foreach(_sms_queue, sms_item, next)
+		clist_foreach_safe(_sms_queue, sms_item, aux2, next)
 		{
 			dwg_outqueue_t	*oq_sms	= malloc(sizeof(dwg_outqueue_t));
 
@@ -153,6 +154,7 @@ void *dwg_server_gw_interactor(void *param)
 																						sms_item->gw_port);
 
 			clist_rm(sms_item, next, prev);
+			free(sms_item);
 
 			clist_append((&outqueue), oq_sms, next, prev);
 		}
@@ -166,18 +168,17 @@ void *dwg_server_gw_interactor(void *param)
 			clist_append((&outqueue), oq_ka, next, prev);
 		}
 
-		clist_foreach((&outqueue), oq_item, next)
+		clist_foreach_safe((&outqueue), oq_item, aux, next)
 		{
 //			hexdump(oq_item->content.s, oq_item->content.len);
 			write_to_gw(cnn_info->client_fd, &oq_item->content);
-
 
 			clist_rm(oq_item, next, prev);
 
 			if (oq_item->content.s != NULL)
 				free(oq_item->content.s);
 
-//			free(oq_item);
+			free(oq_item);
 //			sleep(1);
 		}
 	}
