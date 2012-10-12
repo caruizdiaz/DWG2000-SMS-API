@@ -6,6 +6,7 @@
 
 CFLAGS := -fPIC
 
+
 all: 	dwg.o dwg_server.o ip_socket.o util.o
 	gcc dwg.o dwg_server.o ip_socket.o util.o $(CFLAGS) -shared -o "libdwgsms.pub.so" -lpthread
 
