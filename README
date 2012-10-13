@@ -1,8 +1,17 @@
 This project aims to implement the protocol for sending/receiving SMS's with Dinstra's DWG2000 GSM gateway.
-The project is still in a very early state but I'll be working on it as much as possible.
+The project is still in a early state but I'll be working on it as much as possible.
 There is an official support for Microsoft Windows but the manufacturer lacks of a version for *nix operating systems.
 
-TODO list:
+How to compile
+==============
 
-1. Finish the implementation.
-2. Add a C# binding for the library.
+- Clone the repo or download the sources.
+- Go to the source directory and run: make && make install.
+
+The sources will compile as a shared object and you will probably need
+a executable project to use the library. If that is the case, please 
+checkout the client in one on my repositories.
+
+
+If any doubts arises, please visit my blog http://caruizdiaz.com or write me
+an email, I will be answering as soon as I can.
