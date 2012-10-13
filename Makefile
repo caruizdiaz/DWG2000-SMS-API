@@ -24,3 +24,6 @@ util.o:	util.c
 
 clean:
 	rm -rf dwg.o dwg_server.o ip_socket.o util.o libdwgsms.pub.so
+
+install:
+	cp libdwgsms.pub.so /usr/lib/
