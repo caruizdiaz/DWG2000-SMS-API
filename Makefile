@@ -27,3 +27,4 @@ clean:
 
 install:
 	cp libdwgsms.pub.so /usr/lib/
+
