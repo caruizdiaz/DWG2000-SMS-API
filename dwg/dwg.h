@@ -19,6 +19,7 @@ typedef struct sms
 } sms_t;
 
 #define DWG_MSG_HEADER_SIZE 	24
+#define DWG_SMS_HEADER_SIZE 	45 /* 24 + 1 + 1 + 15 + 1 + 1 + 2 */
 
 typedef struct dwg_msg_header_id
 {

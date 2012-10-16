@@ -203,8 +203,16 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 
 	if (aux < 0)
 	{
-		LOG(L_ERROR, "%s: error getting message length. Original length: %d, swapped length: %d\n", __FUNCTION__, swap_bytes_16(aux), aux);
-		return FALSE;
+		LOG(L_ERROR, "%s: error getting message length. Original length: %d, swapped length: %d. Using workaround to fix it\n", __FUNCTION__, swap_bytes_16(aux), aux);
+		aux	= msg_body->len - DWG_SMS_HEADER_SIZE;
+
+		if (aux < 0)
+		{
+			LOG(L_ERROR, "%s: Couldn't be able to fix message length\n", __FUNCTION__);
+			return FALSE;
+		}
+
+		LOG(L_ERROR, "%s: fixed length is: %d\n", __FUNCTION__, aux);
 	}
 
 
@@ -540,7 +548,6 @@ _bool dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output)
 		size	= sizeof(dwg_sms_request_t) - sizeof(str_t) /* str_t content */ + msg->content.len;
 
 	STR_ALLOC((*output), size);
-	//output->s	= malloc(size);
 	if (!output->s)
 	{
 		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, size);
@@ -583,16 +590,14 @@ _bool dwg_build_msg_header(int length, short type, str_t *output)
 	hdr.MAC[6]	= 0;
 	hdr.MAC[7]	= 0;
 
-	hdr.serial		= 6;
+	hdr.serial		= rand() % 9999;
 
 	return dwg_build_msg_header_with_header(&hdr, output);
 }
 
 _bool dwg_build_msg_header_with_header(dwg_msg_des_header_t *hdr, str_t *output)
 {
-//	dwg_msg_header_t header;
 	int offset = 0;
-//	short type_16 = 0;
 
 	STR_ALLOC((*output), DWG_MSG_HEADER_SIZE);
 	if (!output->s)
@@ -600,49 +605,6 @@ _bool dwg_build_msg_header_with_header(dwg_msg_des_header_t *hdr, str_t *output)
 		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, DWG_MSG_HEADER_SIZE);
 		return FALSE;
 	}
-
-/*	bzero(header.ID.MAC, sizeof(header.ID.MAC));
-	bzero(header.flag, sizeof(header.flag));
-	bzero(header.ID.time, sizeof(header.ID.time));
-	bzero(header.ID.serial_number, sizeof(header.ID.serial_number)); */
-
-/*	header.ID.MAC[0]	= 0x0;
-	header.ID.MAC[1]	= 0x1f;
-	header.ID.MAC[2]	= 0xd6;
-	header.ID.MAC[3]	= 0xc7;
-	header.ID.MAC[4]	= 0x6e;
-	header.ID.MAC[5]	= 0x7e;
-	header.ID.MAC[6]	= 0;
-	header.ID.MAC[7]	= 0;*/
-//00 1f d6 c7 6e 7e
-
-/*	header.ID.serial_number[0] = 0x0;
-	header.ID.serial_number[1] = 0x0;
-	header.ID.serial_number[2] = 0x0;
-	header.ID.serial_number[3] = 0x0d;*/
-	//printf("serial-> %d\n", serial);
-	//memcpy(header.ID.serial_number, &serial, sizeof(header.ID.serial_number));
-
-    // 36 f7 18 d0
-	// 0d 1f 76 b6
-
-
-/*	header.ID.time[0] = 0x37;
-	header.ID.time[1] = 0x5;
-	header.ID.time[2] = 0xb5;
-	header.ID.time[3] = 0xf6; */
-
-	//serial	 	= swap_bytes_32(serial)
-	/*printf("timestamp -> %d\n", timestamp);
-	length		= swap_bytes_32(length);
-	type_16		= swap_bytes_16(type);
-	timestamp	= swap_bytes_32(time(NULL));
-	printf("timestamp2 -> %d\n", timestamp);*/
-
-/*	memcpy(&header.length, &hdr->length, sizeof(header.length));
-	memcpy(&header.type, &hdr->type, sizeof(header.type));
-	memcpy(&header.ID.serial_number, &hdr->serial, sizeof(header.ID.serial_number));
-	memcpy(&header.ID.time, &hdr->timestamp, sizeof(header.ID.time)); */
 
 	hdr->length		= swap_bytes_32(hdr->length);
 	hdr->type		= swap_bytes_16(hdr->type);
@@ -673,12 +635,11 @@ static short swap_bytes_16(short input)
 
 static int swap_bytes_32(int input)
 {
-	return ((input>>24)&0xff) | 		// move byte 3 to byte 0
-            ((input<<8)&0xff0000) | 	// move byte 1 to byte 2
-            ((input>>8)&0xff00) | 		// move byte 2 to byte 1
-            ((input<<24)&0xff000000); 	// byte 0 to byte 3
+	return ((input>>24)&0xff) 		| 		// move byte 3 to byte 0
+            ((input<<8)&0xff0000) 	| 		// move byte 1 to byte 2
+            ((input>>8)&0xff00) 	| 		// move byte 2 to byte 1
+            ((input<<24)&0xff000000); 		// byte 0 to byte 3
 }
-
 
 void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output)
 {
@@ -690,13 +651,6 @@ void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output)
 	GET_MSG_OFFSET(output->ID.serial_number, offset, input->s);
 	GET_MSG_OFFSET(output->type, offset, input->s);
 	GET_MSG_OFFSET(output->flag, offset, input->s);
-/*
-	int timestamp = 0;
-	memcpy(&timestamp, output->ID.time, 4);
-	printf("timestamp hdr -> %d\n", timestamp);
-	timestamp = swap_bytes_32(timestamp);
-	printf("timestamp hdr -> %d\n", timestamp);
-	*/
 }
 
 
@@ -713,8 +667,6 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
     	LOG(L_ERROR, "%s: error processing message\n", __FUNCTION__);
     	return;
     }
-
-//    clist_init(outqueue, next, prev);
 
     clist_foreach_safe(hbp, item, aux, next)
     {
@@ -742,17 +694,6 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 
 				DWG_CALL_IF_NOT_NULL(_callbacks->status_callback, ip_from, ports_status);
 
-	/*
-				LOG(L_DEBUG, "\tNumber of ports: %d\n", (int) body.s[0]);
-				LOG(L_DEBUG, "\t\tPORT0: %d\n", (int) body.s[1]);
-				LOG(L_DEBUG, "\t\tPORT1: %d\n", (int) body.s[2]);
-				LOG(L_DEBUG, "\t\tPORT2: %d\n", (int) body.s[3]);
-				LOG(L_DEBUG, "\t\tPORT3: %d\n", (int) body.s[4]);
-				LOG(L_DEBUG, "\t\tPORT4: %d\n", (int) body.s[5]);
-				LOG(L_DEBUG, "\t\tPORT5: %d\n", (int) body.s[6]);
-				LOG(L_DEBUG, "\t\tPORT6: %d\n", (int) body.s[7]);
-				LOG(L_DEBUG, "\t\tPORT7: %d\n", (int) body.s[8]);
-	*/
 				output	= malloc(sizeof(dwg_outqueue_t));
 				if (!dwg_build_status_response(&item->hdr, &output->content))
 				{
