@@ -26,5 +26,5 @@ clean:
 	rm -rf dwg.o dwg_server.o ip_socket.o util.o libdwgsms.pub.so
 
 install:
-	cp libdwgsms.pub.so /usr/lib/
+	cp -f libdwgsms.pub.so /usr/lib/
 
