@@ -83,12 +83,14 @@ typedef struct dwg_sms_res
 typedef struct dwg_sms_received
 {
 	char number[24];
+	str_t str_number;
 	int type;
 	int port;
 	char timestamp[16];
 	int timezone;
 	int encoding;
 	str_t message;
+
 } dwg_sms_received_t;
 
 typedef struct dwg_port_status

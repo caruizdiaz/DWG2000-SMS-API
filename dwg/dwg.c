@@ -180,6 +180,9 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 	memcpy(received->number, msg_body->s, sizeof(received->number));
 	offset += sizeof(received->number);
 
+	received->str_number.s	= received->number;
+	received->str_number.len= strlen(received->number);
+
 	received->type	= (int) msg_body->s[offset];
 	offset++;
 
@@ -215,6 +218,7 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 		LOG(L_ERROR, "%s: fixed length is: %d\n", __FUNCTION__, aux);
 	}
 
+//	ascii2unicode(&ascii_number, &received->unicode_number);
 
 	STR_ALLOC(sms_content, aux + 1);
 	if (!sms_content.s)
