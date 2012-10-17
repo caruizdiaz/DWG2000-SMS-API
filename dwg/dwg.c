@@ -153,6 +153,9 @@ void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
 	memcpy(response->number, &input->s[1], sizeof(response->number));
 	offset += sizeof(response->number);
 
+	response->str_number.s	= response->number;
+	response->str_number.len= strlen(response->number);
+
 	response->port		= (int) input->s[offset];
 	offset++;
 

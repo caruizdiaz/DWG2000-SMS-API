@@ -74,6 +74,7 @@ typedef struct dwg_sms_res
 {
 	int count_of_number;
 	char number[24];
+	str_t str_number;
 	int port;
 	dwg_sms_result_code_t result;
 	int count_of_slice;
