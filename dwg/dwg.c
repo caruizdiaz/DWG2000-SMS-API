@@ -12,6 +12,7 @@
 #include "dwg.h"
 #include "clist.h"
 #include "dwg_server.h"
+#include "dwg_charset.h"
 #include "../networking/ip_socket.h"
 
 
@@ -30,12 +31,8 @@ typedef struct dwg_hbp
 static _bool dwg_build_msg_header(int length, short type, str_t *output);
 static _bool dwg_build_msg_header_with_header(dwg_msg_des_header_t *hdr, str_t *output);
 static _bool dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output);
-static int swap_bytes_32(int input);
-static short swap_bytes_16(short input);
 static _bool get_messages(str_t *input, dwg_hbp_t *hbp);
-static void unicode2ascii(str_t *unicode, str_t* ascii);
-static void ascii2unicode(str_t *ascii, str_t* unicode)
-;
+
 static dwg_message_callback_t *_callbacks	= NULL;
 listener_data_t *listener_data;
 _bool _is_api_2_0							= FALSE;
@@ -81,7 +78,9 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 	}*/
 
 	request.port			= port;
-	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
+//	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
+	request.encoding		= DWG_ENCODING_GSM7BIT;
+//	request.encoding		= DWG_ENCODING_UNICODE;
 	request.type			= DWG_MSG_TYPE_SMS;
 	request.count_of_number	= 1;
 
@@ -90,6 +89,10 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 
 	if (request.encoding == DWG_ENCODING_ASCII)
 	{
+		str_t gsm7bit;
+
+		dwg_ascii2gsm7bit(&sms->content, &gsm7bit);
+
 		length_16	= swap_bytes_16((short) sms->content.len);
 		memcpy(request.content_length, &length_16, sizeof(request.content_length));
 
@@ -100,13 +103,14 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 			return FALSE;
 		}
 
-		memcpy(request.content.s, sms->content.s, sms->content.len);
+//		memcpy(request.content.s, sms->content.s, sms->content.len);
+		memcpy(request.content.s, gsm7bit.s, gsm7bit.len);
 	}
 	else
 	{
 		str_t unicode;
 
-		ascii2unicode(&sms->content, &unicode);
+		dwg_ascii2unicode(&sms->content, &unicode);
 		length_16	= swap_bytes_16((short) unicode.len);
 		memcpy(request.content_length, &length_16, sizeof(request.content_length));
 
@@ -137,8 +141,11 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 
 	STR_FREE_NON_0(body);
 	STR_FREE_NON_0(request.content);
-//	hexdump(output->s, output->len);
 
+//	printf("---------------------\n");
+//	hexdump(output->s, output->len);
+//	printf("---------------------\n");
+	
 	return TRUE;
 }
 
@@ -250,56 +257,10 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 		return TRUE;
 	}
 
-	unicode2ascii(&sms_content, &received->message);
+	dwg_unicode2ascii(&sms_content, &received->message);
 
 	STR_FREE(sms_content);
 	return TRUE;
-}
-
-static void unicode2ascii(str_t *unicode, str_t* ascii)
-{
-	short uni_array[unicode->len / 2];
-	int i;
-
-//	hexdump(unicode->s, unicode->len);
-
-//	printf("before conversion [%.*s]\n", unicode->len, unicode->s);
-	memcpy(&uni_array, unicode->s, unicode->len);
-	STR_ALLOC((*ascii), (unicode->len / 2));
-	if (!ascii->s)
-	{
-		LOG(L_ERROR, "%s: no more memory trying to allocate %d bytes\n", __FUNCTION__,  (unicode->len / 2));
-		return;
-	}
-
-	for(i = 0; i < (unicode->len / 2); i++)
-		ascii->s[i]	= swap_bytes_16(uni_array[i]);
-
-//	printf("after conversion [%.*s]\n", ascii->len, ascii->s);
-}
-
-static void ascii2unicode(str_t *ascii, str_t* unicode)
-{
-	int i;
-
-//	hexdump(unicode->s, unicode->len);
-
-//	printf("before [%.*s]\n", unicode->len, unicode->s);
-//	memcpy(&uni_array, unicode->s, unicode->len);
-	STR_ALLOC((*unicode), ascii->len * 2);
-	if (!unicode->s)
-	{
-		LOG(L_ERROR, "%s: no more memory trying to allocate %d bytes\n", __FUNCTION__,  ascii->len * 2);
-		return;
-	}
-
-	for(i = 0; i < ascii->len; i++)
-	{
-		unicode->s[i * 2]		= 0;
-		unicode->s[i * 2 + 1]	= ascii->s[i];
-		//printf("%c|%c", uni_array[i], swap_bytes_16(uni_array[i]));
-	}
-	//printf("after [%.*s]\n", ascii->len, ascii->s);
 }
 
 static _bool get_messages(str_t *input, dwg_hbp_t *hbp)
@@ -633,19 +594,6 @@ _bool dwg_build_msg_header_with_header(dwg_msg_des_header_t *hdr, str_t *output)
 	//printf("offset: %d\n", offset);
 
 	return TRUE;
-}
-
-static short swap_bytes_16(short input)
-{
-	return (input>>8) | (input<<8);
-}
-
-static int swap_bytes_32(int input)
-{
-	return ((input>>24)&0xff) 		| 		// move byte 3 to byte 0
-            ((input<<8)&0xff0000) 	| 		// move byte 1 to byte 2
-            ((input>>8)&0xff00) 	| 		// move byte 2 to byte 1
-            ((input<<24)&0xff000000); 		// byte 0 to byte 3
 }
 
 void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output)

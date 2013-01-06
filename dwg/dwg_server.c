@@ -14,6 +14,7 @@
 #define BUFFER_SIZE 	20000
 
 #include "dwg_server.h"
+#include "dwg_charset.h"
 #include "clist.h"
 #include "../util.h"
 #include "../networking/ip_socket.h"
@@ -45,6 +46,10 @@ void dwg_initilize_server()
 {
 	_sms_queue	= malloc(sizeof(sms_outqueue_t));
 	clist_init(_sms_queue, next, prev);
+	dwg_initialize_translation_table();
+	/*printf("---\n");
+	dwg_initialize_translation_table();
+	printf("*---\n");*/
 }
 
 void dwg_server_write_to_queue(sms_t *sms, unsigned int port)

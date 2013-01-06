@@ -120,8 +120,9 @@ typedef struct dwg_ports_status
 #define DWG_TYPE_RECV_AUTH				0x0f
 #define DWG_TYPE_RECV_AUTH_RESP			0x10
 
-#define DWG_ENCODING_ASCII			0
-#define DWG_ENCODING_UNICODE		1
+#define DWG_ENCODING_GSM7BIT		0   // valid only in API implementations prior to 1.4
+#define DWG_ENCODING_ASCII			0   // ASCII is used for API version 1.4
+#define DWG_ENCODING_UNICODE		1	// called UCS2 in API 2.0
 
 #define DWG_MSG_TYPE_SMS			1
 #define DWG_MSG_TYPE_MMS			1

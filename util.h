@@ -62,5 +62,7 @@ typedef struct str
 									   strcpy(_str_to_.s, _str_from_.s); \
 
 void hexdump(void *ptr, int buflen);
+short swap_bytes_16(short input);
+int swap_bytes_32(int input);
 
 #endif /* UTIL_H_ */
