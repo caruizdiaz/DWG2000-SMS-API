@@ -87,8 +87,6 @@ void dwg_ascii2gsm7bit(str_t *ascii, str_t* gsm7bit)
 		gsm7bit->s[i]	= ascii2gsm7bit[ascii->s[i]];
 	}
 
-//	printf("ascii-> %.*s\n", ascii->len, ascii->s);
-//	printf("gsm7bit-> %.*s\n", gsm7bit->len, gsm7bit->s);
 }
 
 void dwg_ascii2unicode(str_t *ascii, str_t* unicode)

@@ -78,9 +78,9 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 	}*/
 
 	request.port			= port;
-//	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
-	request.encoding		= DWG_ENCODING_GSM7BIT;
-//	request.encoding		= DWG_ENCODING_UNICODE;
+	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
+//	request.encoding		= DWG_ENCODING_GSM7BIT;
+	request.encoding		= DWG_ENCODING_UNICODE;
 	request.type			= DWG_MSG_TYPE_SMS;
 	request.count_of_number	= 1;
 
