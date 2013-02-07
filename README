@@ -1,3 +1,12 @@
+* IMPORTANT NOTE *
+
+Dinstar people change their API like they change their clothes. 
+Since I only tested the code with two of their models I cannot assure it will work for other models. Let me know in 
+what model it's failing and I will try to fix it.
+
+Overview
+=========
+
 This project aims to implement the protocol for sending/receiving SMS's with Dinstra's DWG2000 GSM gateway.
 The project is still in a early state but I'll be working on it as much as possible.
 There is an official support for Microsoft Windows but the manufacturer lacks of a version for *nix operating systems.
