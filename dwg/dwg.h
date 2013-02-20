@@ -189,6 +189,7 @@ typedef struct dwg_outqueue
 
 _bool dwg_build_keep_alive(str_t *output);
 _bool dwg_build_sms(sms_t *sms, int port, str_t *output);
+_bool dwg_build_ussd(str_t *content, int port, int type, str_t *output);
 void dwg_get_msg_header(str_t *input, dwg_msg_header_t *output);
 _bool dwg_build_sms_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
 _bool dwg_build_sms_res_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
@@ -197,6 +198,7 @@ _bool dwg_build_status_response(dwg_msg_des_header_t *original_hdr, str_t *outpu
 _bool dwg_build_auth_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 _bool dwg_build_rssi_response(dwg_msg_des_header_t *original_hdr, str_t *output);
 void dwg_send_sms(str_t *destination, str_t *message, unsigned int port);
+void dwg_send_ussd(str_t *destination, unsigned int port);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
 void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue);
 _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);

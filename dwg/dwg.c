@@ -15,7 +15,6 @@
 #include "dwg_charset.h"
 #include "../networking/ip_socket.h"
 
-
 /*
  * DWG header-body pair
  */
@@ -54,6 +53,14 @@ void dwg_stop_server()
 
 	dwg_kill_connection();
 }
+void dwg_send_ussd(str_t *destination, unsigned int port)
+{
+	str_t *service	= malloc(sizeof(str_t));
+
+	str_copy((*service), (*destination));
+
+	dwg_server_write_to_queue(service, 1, port);
+}
 
 void dwg_send_sms(str_t *destination, str_t *message, unsigned int port)
 {
@@ -62,7 +69,7 @@ void dwg_send_sms(str_t *destination, str_t *message, unsigned int port)
 	str_copy(sms->destination, (*destination));
 	str_copy(sms->content, (*message));
 
-	dwg_server_write_to_queue(sms, port);
+	dwg_server_write_to_queue(sms, 0, port);
 }
 
 _bool dwg_build_ussd(str_t *content, int port, int type, str_t *output)
@@ -86,7 +93,7 @@ _bool dwg_build_ussd(str_t *content, int port, int type, str_t *output)
 	}
 
 	dwg_serialize_ussd_req(&request, &body);
-	dwg_build_msg_header(body.len, DWG_USSD_TYPE_SEND, &header);
+	dwg_build_msg_header(body.len, DWG_TYPE_SEND_USSD, &header);
 
 	STR_ALLOC((*output), (header.len + body.len));
 	if (!output->s)
@@ -159,7 +166,7 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 	}
 
 	dwg_serialize_sms_req(&request, &body);
-	dwg_build_msg_header(body.len, DWG_MSG_TYPE_SMS, &header);
+	dwg_build_msg_header(body.len, DWG_TYPE_SEND_SMS, &header);
 
 	STR_ALLOC((*output), (header.len + body.len));
 	if (!output->s)

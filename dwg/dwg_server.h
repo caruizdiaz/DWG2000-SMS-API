@@ -19,15 +19,8 @@
 									pthread_mutex_unlock(&_queue_.lock);
 
 void *dwg_server_gw_interactor(void *param);
-void dwg_server_write_to_queue(sms_t *sms, unsigned int port);
+void dwg_server_write_to_queue(void *message, int type, unsigned int port);
 void dwg_initilize_server();
 void dwg_kill_connection();
 #endif /* DWG_SERVER_H_ */
-/*
-000000: 35 39 35 39 38 31 31 34 36 36 32 33 00 00 00 00  595981146623....
-000010: 00 00 00 00 00 00 00 00 |00| 00| 32 30 31 32 30 34  ..........201204
-000020: 31 31 31 34 30 35 34 31 00| 04| 00 |00 05| 54 77 6d  11140541.....Twm
-000030: 6a 64                                            jd
--> 0
--> 12593
-*/
+
