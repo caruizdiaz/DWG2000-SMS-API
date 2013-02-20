@@ -73,13 +73,14 @@ void dwg_server_write_to_queue(sms_t *sms, unsigned int port)
 void *dwg_server_gw_interactor(void *param)
 {
 	char buffer[BUFFER_SIZE];
-	connection_info_t *cnn_info			= ((connection_info_t *)param);
+	connection_info_t *cnn_info			= (connection_info_t *) param;
 	int	bytes_read 						= 0,
 		time_elapsed					= 0;
 	sms_outqueue_t	*sms_item, *aux2;
 	_bool keep_alive					= FALSE;
 	dwg_outqueue_t outqueue, *oq_item, *aux;
 
+	memset(&outqueue, 0, sizeof(dwg_outqueue_t));
 	_socket_fd	= cnn_info->client_fd;
 
 	fcntl(cnn_info->client_fd, F_SETFL, O_NONBLOCK);	// set the socket to non-blocking mode
@@ -172,11 +173,18 @@ void *dwg_server_gw_interactor(void *param)
 
 			clist_append((&outqueue), oq_ka, next, prev);
 		}
+		/*
+		 * Processing of the main queue
+		 */
 
 		clist_foreach_safe((&outqueue), oq_item, aux, next)
 		{
 //			hexdump(oq_item->content.s, oq_item->content.len);
-			write_to_gw(cnn_info->client_fd, &oq_item->content);
+			if (!write_to_gw(cnn_info->client_fd, &oq_item->content))
+			{
+				LOG(L_ERROR, "%s: Error writing outgoing SMS to gateway\n", __FUNCTION__);
+				continue;
+			}
 
 			clist_rm(oq_item, next, prev);
 

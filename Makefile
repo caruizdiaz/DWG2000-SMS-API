@@ -4,7 +4,7 @@
 #         caruizdiaz.com
 #
 
-CFLAGS := -fPIC
+CFLAGS := -fPIC -g
 
 
 all: 	dwg.o dwg_server.o ip_socket.o util.o dwg_charset.o

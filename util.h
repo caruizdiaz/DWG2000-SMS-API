@@ -59,7 +59,7 @@ typedef struct str
 
 #define str_copy(_str_to_, _str_from_) _str_to_.s = calloc(_str_from_.len + 1, sizeof(char)); \
 									   _str_to_.len = _str_from_.len; \
-									   strcpy(_str_to_.s, _str_from_.s); \
+									   memcpy(_str_to_.s, _str_from_.s, _str_from_.len); \
 
 void hexdump(void *ptr, int buflen);
 short swap_bytes_16(short input);

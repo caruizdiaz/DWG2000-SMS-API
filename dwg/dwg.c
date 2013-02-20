@@ -6,7 +6,7 @@
  *
  */
 
-//#define WITH_DEBUG
+#define WITH_DEBUG
 
 #include <time.h>
 #include "dwg.h"
@@ -31,6 +31,7 @@ typedef struct dwg_hbp
 static _bool dwg_build_msg_header(int length, short type, str_t *output);
 static _bool dwg_build_msg_header_with_header(dwg_msg_des_header_t *hdr, str_t *output);
 static _bool dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output);
+static _bool dwg_serialize_ussd_req(dwg_ussd_request_t *msg, str_t *output);
 static _bool get_messages(str_t *input, dwg_hbp_t *hbp);
 
 static dwg_message_callback_t *_callbacks	= NULL;
@@ -64,23 +65,54 @@ void dwg_send_sms(str_t *destination, str_t *message, unsigned int port)
 	dwg_server_write_to_queue(sms, port);
 }
 
+_bool dwg_build_ussd(str_t *content, int port, int type, str_t *output)
+{
+	dwg_ussd_request_t request;
+	str_t body, header;
+	short length_16;
+
+	request.port	= port;
+	request.type	= type;
+
+	length_16		= swap_bytes_16(content->len);
+	memcpy(request.content_length, &length_16, sizeof(request.content_length));
+
+	str_copy(request.content, (*content));
+
+	if (!request.content.s)
+	{
+		LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, content->len);
+		return FALSE;
+	}
+
+	dwg_serialize_ussd_req(&request, &body);
+	dwg_build_msg_header(body.len, DWG_USSD_TYPE_SEND, &header);
+
+	STR_ALLOC((*output), (header.len + body.len));
+	if (!output->s)
+	{
+		LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, header.len + body.len);
+		return FALSE;
+	}
+
+	memcpy(output->s, header.s, header.len);
+	memcpy(&output->s[header.len], body.s, body.len);
+
+	STR_FREE_NON_0(body);
+	STR_FREE_NON_0(request.content);
+
+	return TRUE;
+}
 _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 {
 	dwg_sms_request_t request;
 	str_t body, header;
 	short length_16;
 
-	/*STR_ALLOC(body, (sizeof(dwg_sms_request_t) - sizeof(str_t)) + sms->content.len);
-	if (!body.s)
-	{
-		LOG(L_ERROR, "%s.%d: No more memory trying to allocate %d bytes\n", __FUNCTION__, __LINE__, body.len);
-		return FALSE;
-	}*/
-
 	request.port			= port;
 	request.encoding		= (_is_api_2_0) ? DWG_ENCODING_UNICODE : DWG_ENCODING_ASCII;
 //	request.encoding		= DWG_ENCODING_GSM7BIT;
-	request.encoding		= DWG_ENCODING_UNICODE;
+//	request.encoding		= DWG_ENCODING_UNICODE;
 	request.type			= DWG_MSG_TYPE_SMS;
 	request.count_of_number	= 1;
 
@@ -179,6 +211,72 @@ void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
 	int i = 0;
 	for (i = 0; i < 24; i++)
 		printf("%c", response->number[i]); */
+}
+
+_bool dwg_deserialize_ussd_received(str_t *msg_body, dwg_ussd_received_t *received)
+{
+	int offset	= 0;
+	str_t ussd_content;
+
+	received->port	= (int) msg_body->s[offset];
+	offset++;
+
+	received->status= (int) msg_body->s[offset];
+	offset++;
+
+	short aux	= 0;
+	memcpy(&aux, &msg_body->s[offset], 2);
+	aux	= swap_bytes_16(aux);
+	offset += 2;
+
+	if (aux < 0)
+	{
+		LOG(L_ERROR, "%s: error getting message length. Original length: %d, swapped length: %d. Using workaround to fix it\n", __FUNCTION__, swap_bytes_16(aux), aux);
+		aux	= msg_body->len - DWG_USSD_HEADER_SIZE;
+
+		if (aux < 0)
+		{
+			LOG(L_ERROR, "%s: Couldn't be able to fix message length\n", __FUNCTION__);
+			return FALSE;
+		}
+
+		LOG(L_ERROR, "%s: fixed length is: %d\n", __FUNCTION__, aux);
+	}
+
+	received->encoding	= (int) msg_body->s[offset];
+	offset++;
+
+	STR_ALLOC(ussd_content, aux + 1);
+	if (!ussd_content.s)
+	{
+		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, aux + 1);
+		return FALSE;
+	}
+
+	ussd_content.len--;
+
+	memcpy(ussd_content.s, &msg_body->s[offset], aux);
+	ussd_content.s[aux] = '\0';
+
+	received->message	= ussd_content;
+
+	if (_is_api_2_0 && (received->encoding == DWG_ENCODING_ASCII))
+	{
+		LOG(L_ERROR, "%s: encoding gsm7bit not supported\n", __FUNCTION__);
+//		STR_FREE(sms_content);
+		return FALSE;
+	}
+
+	if (received->encoding == DWG_ENCODING_ASCII)
+	{
+//		STR_FREE(sms_content);
+		return TRUE;
+	}
+
+	dwg_unicode2ascii(&ussd_content, &received->message);
+
+	STR_FREE(ussd_content);
+	return TRUE;
 }
 
 _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received)
@@ -480,6 +578,31 @@ _bool dwg_build_sms_res_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 	return TRUE;
 }
 
+_bool dwg_build_ussd_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
+{
+	str_t header;
+	char response	= SMS_RC_SUCCEED;
+
+	original_hdr->length	= 1; // update length
+	original_hdr->type		= DWG_TYPE_RECV_USSD_RESULT;
+	dwg_build_msg_header_with_header(original_hdr, &header);
+
+	STR_ALLOC((*output), header.len + 1);
+	if (!output->s)
+	{
+		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, header.len + 1);
+		return FALSE;
+	}
+	output->len	= header.len + 1;
+
+	memcpy(output->s, header.s, header.len);
+	memcpy(&output->s[header.len], &response, sizeof(char));
+
+	STR_FREE_NON_0(header);
+
+	return TRUE;
+}
+
 _bool dwg_build_sms_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output)
 {
 	str_t header;
@@ -510,7 +633,31 @@ _bool dwg_build_keep_alive(str_t *output)
 	return dwg_build_msg_header(0, DWG_TYPE_KEEP_ALIVE, output);
 }
 
-_bool dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output)
+static _bool dwg_serialize_ussd_req(dwg_ussd_request_t *msg, str_t *output)
+{
+	int offset	= 0,
+		size	= sizeof(dwg_ussd_request_t) - sizeof(str_t) /* str_t content */ + msg->content.len;
+
+	STR_ALLOC((*output), size);
+	if (!output->s)
+	{
+		LOG(L_ERROR, "%s: No more memory trying to allocate %d bytes\n", __FUNCTION__, size);
+		return FALSE;
+	}
+
+	ADD_MSG_OFFSET(msg->port, offset, output->s);
+	ADD_MSG_OFFSET(msg->type, offset, output->s);
+	ADD_MSG_OFFSET(msg->content_length, offset, output->s);
+
+	memcpy(&output->s[offset], msg->content.s, msg->content.len);
+	offset += msg->content.len;
+
+	output->len	= offset;
+
+	return TRUE;
+}
+
+static _bool dwg_serialize_sms_req(dwg_sms_request_t *msg, str_t *output)
 {
 	int offset	= 0,
 		size	= sizeof(dwg_sms_request_t) - sizeof(str_t) /* str_t content */ + msg->content.len;
@@ -662,16 +809,19 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 			case DWG_TYPE_SEND_SMS:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS\n", __FUNCTION__);
 				break;
+			case DWG_TYPE_SEND_USSD:
+				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_USSD\n", __FUNCTION__);
+				break;
 			case DWG_TYPE_SEND_SMS_RESP:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESP\n", __FUNCTION__);
 
 				if ((int) item->body.s[0] == 0)
 				{
-					LOG(L_DEBUG, "%s: SMS was received by the gw\n", __FUNCTION__);
+					LOG(L_DEBUG, "%s: SMS was received by the GW\n", __FUNCTION__);
 				}
 				else
 				{
-					LOG(L_ERROR, "%s: Error sending sms\n", __FUNCTION__);
+					LOG(L_ERROR, "%s: Error sending SMS\n", __FUNCTION__);
 				}
 
 				output	= malloc(sizeof(dwg_outqueue_t));
@@ -682,6 +832,19 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 					free(output);
 					output	= NULL;
 				}
+				break;
+			case DWG_TYPE_SEND_USSD_RESP:
+				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_USSD_RESP\n", __FUNCTION__);
+
+				if ((int) item->body.s[0] == 0)
+				{
+					LOG(L_DEBUG, "%s: USSD was received by the GW\n", __FUNCTION__);
+				}
+				else
+				{
+					LOG(L_ERROR, "%s: Error sending USSD\n", __FUNCTION__);
+				}
+
 				break;
 			case DWG_TYPE_SEND_SMS_RESULT:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_SEND_SMS_RESULT\n", __FUNCTION__);
@@ -724,6 +887,30 @@ void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue)
 					output	= NULL;
 				}
 				break;
+			case DWG_TYPE_RECV_USSD:
+				LOG(L_DEBUG, "%s: received DWG_TYPE_RECV_USSD\n", __FUNCTION__);
+
+				dwg_ussd_received_t *ussd_rcv	= malloc(sizeof(dwg_ussd_received_t));
+
+				if (!dwg_deserialize_ussd_received(&item->body, ussd_rcv))
+				{
+					LOG(L_ERROR, "%s: error deserializing received USSD message\n", __FUNCTION__);
+					hexdump(item->body.s, item->body.len);
+					break;
+				}
+
+				DWG_CALL_IF_NOT_NULL(_callbacks->msg_ussd_recv_callback, ip_from, ussd_rcv);
+
+				output	= malloc(sizeof(dwg_outqueue_t));
+				if (!dwg_build_ussd_recv_ack(&item->hdr, &output->content))
+				{
+					LOG(L_ERROR, "%s: error building response", __FUNCTION__);
+
+					free(output);
+					output	= NULL;
+				}
+				break;
+
 			case DWG_TYPE_RECV_AUTH:
 				LOG(L_DEBUG, "%s: received DWG_TYPE_RECV_AUTH\n", __FUNCTION__);
 

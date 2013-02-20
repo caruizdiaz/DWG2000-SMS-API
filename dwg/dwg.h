@@ -20,6 +20,7 @@ typedef struct sms
 
 #define DWG_MSG_HEADER_SIZE 	24
 #define DWG_SMS_HEADER_SIZE 	45 /* 24 + 1 + 1 + 15 + 1 + 1 + 2 */
+#define DWG_USSD_HEADER_SIZE 	5 /* 1 + 1 + 2 + 1 */
 
 typedef struct dwg_msg_header_id
 {
@@ -46,6 +47,16 @@ typedef struct dwg_msg_des_header
 	int16_t type;
 	int16_t flag;
 } dwg_msg_des_header_t;
+
+typedef struct dwg_ussd_req
+{
+	char port;
+	char type;
+	char content_length[2];
+
+	str_t content;
+
+} dwg_ussd_request_t;
 
 typedef struct dwg_sms_req
 {
@@ -80,6 +91,15 @@ typedef struct dwg_sms_res
 	int count_of_slice;
 	int succeded_slices;
 } dwg_sms_response_t;
+
+typedef struct dwg_ussd_received
+{
+	int port;
+	int status;
+	int encoding;
+	str_t message;
+
+} dwg_ussd_received_t;
 
 typedef struct dwg_sms_received
 {
@@ -120,12 +140,21 @@ typedef struct dwg_ports_status
 #define DWG_TYPE_RECV_AUTH				0x0f
 #define DWG_TYPE_RECV_AUTH_RESP			0x10
 
+#define DWG_TYPE_SEND_USSD				0x09
+#define DWG_TYPE_SEND_USSD_RESP			0x0a
+#define DWG_TYPE_RECV_USSD				0x0b
+#define DWG_TYPE_RECV_USSD_RESULT		0x0c
+
+
 #define DWG_ENCODING_GSM7BIT		0   // valid only in API implementations prior to 1.4
 #define DWG_ENCODING_ASCII			0   // ASCII is used for API version 1.4
 #define DWG_ENCODING_UNICODE		1	// called UCS2 in API 2.0
 
 #define DWG_MSG_TYPE_SMS			1
 #define DWG_MSG_TYPE_MMS			1
+
+#define DWG_USSD_TYPE_SEND			1
+#define DWG_USSD_TYPE_END_SESSION	2
 
 #define ADD_MSG_OFFSET(_field_, _offset_, _output_) memcpy(&_output_[_offset_], &_field_, sizeof(_field_)); \
 													_offset_ += sizeof(_field_);
@@ -139,12 +168,14 @@ typedef struct dwg_ports_status
 typedef void (*status_callback_fptr) (str_t *gw_ip, dwg_ports_status_t *status);
 typedef void (*msg_response_callback_fptr) (str_t *gw_ip, dwg_sms_response_t *res);
 typedef void (*msg_sms_recv_callback_fptr) (str_t *gw_ip, dwg_sms_received_t *recv);
+typedef void (*msg_ussd_recv_callback_fptr) (str_t *gw_ip, dwg_ussd_received_t *recv);
 
 typedef struct dwg_message_callback
 {
 	status_callback_fptr status_callback;
 	msg_response_callback_fptr msg_response_callback;
 	msg_sms_recv_callback_fptr msg_sms_recv_callback;
+	msg_ussd_recv_callback_fptr msg_ussd_recv_callback;
 
 } dwg_message_callback_t;
 
@@ -169,7 +200,9 @@ void dwg_send_sms(str_t *destination, str_t *message, unsigned int port);
 void dwg_start_server(int port, dwg_message_callback_t *callbacks);
 void dwg_process_message(str_t *ip_from, str_t *input, dwg_outqueue_t *outqueue);
 _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received);
+_bool dwg_deserialize_ussd_received(str_t *msg_body, dwg_ussd_received_t *received);
 _bool dwg_build_sms_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
+_bool dwg_build_ussd_recv_ack(dwg_msg_des_header_t *original_hdr, str_t *output);
 
 void print_something(const char *str);
 
