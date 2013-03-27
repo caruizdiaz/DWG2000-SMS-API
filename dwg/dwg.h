@@ -10,6 +10,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "../util.h"
 
 typedef struct sms

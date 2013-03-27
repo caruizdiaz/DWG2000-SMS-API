@@ -11,6 +11,10 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#ifdef _WIN32_
+#	include <windows.h>
+#endif
+
 #define BUFFER_SIZE 	20000
 
 #include "dwg_server.h"
@@ -60,9 +64,6 @@ void dwg_initilize_server()
 	_msg_queue	= malloc(sizeof(msg_outqueue_t));
 	clist_init(_msg_queue, next, prev);
 	dwg_initialize_translation_table();
-	/*printf("---\n");
-	dwg_initialize_translation_table();
-	printf("*---\n");*/
 }
 
 void dwg_server_write_to_queue(void *message, int type, unsigned int port)
@@ -115,9 +116,20 @@ void *dwg_server_gw_interactor(void *param)
 	dwg_outqueue_t outqueue, *oq_item, *aux;
 
 	memset(&outqueue, 0, sizeof(dwg_outqueue_t));
-	_socket_fd	= cnn_info->client_fd;
+	_socket_fd							= cnn_info->client_fd;
 
+#ifdef _WIN32_
+	u_long iMode = 1;
+	int iResult = ioctlsocket(cnn_info->client_fd, FIONBIO, &iMode);
+
+	if (iResult != NO_ERROR)
+	{
+//		printf("ioctlsocket failed with error: %ld\n", iResult);
+		LOG(L_ERROR, "%s: ioctlsocket failed with error: %ld\n", __FUNCTION__, iResult);
+	}
+#else
 	fcntl(cnn_info->client_fd, F_SETFL, O_NONBLOCK);	// set the socket to non-blocking mode
+#endif
 
 	clist_init((&outqueue), next, prev);
 
@@ -125,9 +137,13 @@ void *dwg_server_gw_interactor(void *param)
 	{
 		str_t from_gw	= { NULL, 0 };
 
-		bzero(buffer, sizeof(buffer));
+		memset(buffer, 0, sizeof(buffer));
 
+#ifdef __WIN32__
+		bytes_read 	= recv(cnn_info->client_fd, buffer, sizeof(buffer), 0);
+#else
 		bytes_read	= read(cnn_info->client_fd, buffer, sizeof(buffer));
+#endif
 
 		if (_stop_now)
 		{
@@ -144,7 +160,12 @@ void *dwg_server_gw_interactor(void *param)
 		}
 
 		keep_alive		= FALSE;
+
+#ifdef __WIN32__
+		Sleep(READ_INTERVAL);
+#else
 		sleep(READ_INTERVAL);
+#endif
 		time_elapsed	+= READ_INTERVAL;
 
 		if (time_elapsed >= KEEP_ALIVE_INTERVAL)
@@ -177,23 +198,41 @@ void *dwg_server_gw_interactor(void *param)
 			/*
 			 * Add built msg to the main outqueue
 			 */
-			if (msg_item->type == 0 && !dwg_build_sms((sms_t *) msg_item->message, msg_item->gw_port, &oq_sms->content))
+			if (msg_item->type == 0)
 			{
-				LOG(L_ERROR, "%s: Error building SMS\n", __FUNCTION__);
+				if (dwg_build_sms((sms_t *) msg_item->message, msg_item->gw_port, &oq_sms->content))
+				{
+					LOG(L_DEBUG, "%s: SMS built\n", __FUNCTION__);
+				}
+				else
+				{
+					LOG(L_ERROR, "%s: Error building SMS\n", __FUNCTION__);
 
-				free(oq_sms);
-				clist_rm(msg_item, next, prev);
+					free(oq_sms);
+					clist_rm(msg_item, next, prev);
 
-				continue;
+					continue;
+				}
 			}
-			else if (!dwg_build_ussd((str_t *) msg_item->message, msg_item->gw_port, 1, &oq_sms->content))
+			else if (msg_item->type == 1)
 			{
-				LOG(L_ERROR, "%s: Error building USSD\n", __FUNCTION__);
+				if (dwg_build_ussd((str_t *) msg_item->message, msg_item->gw_port, 1, &oq_sms->content))
+				{
+					LOG(L_DEBUG, "%s: USSD built\n", __FUNCTION__);
+				}
+				else
+				{
+					LOG(L_ERROR, "%s: Error building USSD\n", __FUNCTION__);
 
-				free(oq_sms);
-				clist_rm(msg_item, next, prev);
+					free(oq_sms);
+					clist_rm(msg_item, next, prev);
 
-				continue;
+					continue;
+				}
+			}
+			else
+			{
+				LOG(L_ERROR, "%s: Unknown message type [%d]\n", __FUNCTION__, msg_item->type);
 			}
 
 			/*if (!dwg_build_sms(msg_item->sms, msg_item->gw_port, &oq_sms->content))
@@ -227,7 +266,6 @@ void *dwg_server_gw_interactor(void *param)
 		/*
 		 * Processing of the main queue
 		 */
-
 		clist_foreach_safe((&outqueue), oq_item, aux, next)
 		{
 //			hexdump(oq_item->content.s, oq_item->content.len);
@@ -243,7 +281,6 @@ void *dwg_server_gw_interactor(void *param)
 				free(oq_item->content.s);
 
 			free(oq_item);
-//			sleep(1);
 		}
 	}
 
@@ -253,7 +290,11 @@ void *dwg_server_gw_interactor(void *param)
 static _bool write_to_gw(int fd, str_t* buffer)
 {
 	int written = 0;
+#ifdef __WIN32__
+	if (buffer->len > 0 && (written = send(fd, buffer->s, buffer->len, 0)) != buffer->len)
+#else
 	if (buffer->len > 0 && (written = write(fd, buffer->s, buffer->len)) != buffer->len)
+#endif
 	{
 		LOG(L_ERROR, "%s: write(): wrote %d/%d bytes only\n", __FUNCTION__, written, buffer->len);
 		return 0;

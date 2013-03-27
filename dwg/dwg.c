@@ -123,7 +123,7 @@ _bool dwg_build_sms(sms_t *sms, int port, str_t *output)
 	request.type			= DWG_MSG_TYPE_SMS;
 	request.count_of_number	= 1;
 
-	bzero(request.number, sizeof(request.number));
+	memset(request.number, 0, sizeof(request.number));
 	memcpy(request.number, sms->destination.s, sms->destination.len);
 
 	if (request.encoding == DWG_ENCODING_ASCII)
@@ -195,7 +195,7 @@ void dwg_deserialize_sms_response(str_t *input, dwg_sms_response_t *response)
 	response->count_of_number	= (int) input->s[offset];
 	offset++;
 
-	bzero(response->number, sizeof(response->number));
+	memset(response->number, 0, sizeof(response->number));
 	memcpy(response->number, &input->s[1], sizeof(response->number));
 	offset += sizeof(response->number);
 
@@ -291,7 +291,7 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 	int offset	= 0;
 	str_t sms_content;
 
-	bzero(received->number, sizeof(received->number));
+	memset(received->number, 0, sizeof(received->number));
 	memcpy(received->number, msg_body->s, sizeof(received->number));
 	offset += sizeof(received->number);
 
@@ -304,7 +304,7 @@ _bool dwg_deserialize_sms_received(str_t *msg_body, dwg_sms_received_t *received
 	received->port	= (int) msg_body->s[offset];
 	offset++;
 
-	bzero(received->timestamp, sizeof(received->timestamp));
+	memset(received->timestamp, 0, sizeof(received->timestamp));
 	memcpy(received->timestamp, &msg_body->s[offset], sizeof(received->timestamp) - 1 /* exclude the null terminator extra space*/);
 	offset += sizeof(received->timestamp) - 1;
 

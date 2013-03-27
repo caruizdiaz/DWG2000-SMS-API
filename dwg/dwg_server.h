@@ -10,8 +10,14 @@
 
 #include "dwg.h"
 
-#define READ_INTERVAL			3 // seconds
-#define KEEP_ALIVE_INTERVAL		30 // KEEP_ALIVE_INTERVAL * READ_INTERVAL
+#ifdef __WIN32__
+#	define READ_INTERVAL			3  * 1000
+#	define KEEP_ALIVE_INTERVAL		30 * 1000
+#else
+#	define READ_INTERVAL			3 // seconds
+#	define KEEP_ALIVE_INTERVAL		30 // KEEP_ALIVE_INTERVAL * READ_INTERVAL
+#endif
+
 #define SMSSRV_PORT				7008
 
 #define SMS_ENQUEUE(_queue_, _sms_) pthread_mutex_lock(&_queue_.lock); \

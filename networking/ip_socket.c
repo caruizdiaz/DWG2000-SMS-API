@@ -5,6 +5,24 @@
  *      Author: caruizdiaz
  */
 
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+#ifdef _WIN32_
+#	include <windows.h>
+#	include <winsock2.h>
+#else
+#	include <sys/types.h>
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#	include <arpa/inet.h>
+#endif
+
+#include <errno.h>
+
 #include "ip_socket.h"
 #include "../util.h"
 
@@ -36,7 +54,7 @@ listener_data_t *ip_start_listener(int port, dflt_func_ptr_t callback, sock_dire
 	server.sin_port 		= htons(port);
 	server.sin_addr.s_addr 	= INADDR_ANY;
 
-	bzero(&(server.sin_zero), 8);
+	memset(&(server.sin_zero), 0, 8);
 
 	if(bind(ldata->sockfd, (struct sockaddr *) &server, sizeof(struct sockaddr)) == -1)
 	{

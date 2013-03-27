@@ -8,16 +8,7 @@
 #ifndef IP_SOCKET_H_
 #define IP_SOCKET_H_
 
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <pthread.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <errno.h>
 
 #include "../util.h"
 
